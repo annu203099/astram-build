@@ -1,0 +1,20 @@
+{
+  "name": "@astram/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Astram Zero-Trust Microkernel Desktop Shell & Native Installer (Tauri v2)",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:ui": "pnpm --filter @astram/ui run build"
+  },
+  "dependencies": {
+    "@astram/ui": "workspace:*",
+    "@astram/server": "workspace:*",
+    "@astram/mcp-proxy": "workspace:*"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
+
