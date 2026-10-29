@@ -1,0 +1,12 @@
+packages:
+  - "packages/*"
+  - "testbed-attacks"
+
+# pnpm >= 11 build-script approval map (better-sqlite3 needs its prebuilt-binary
+# install step; esbuild/@tailwindcss/oxide ship binaries via optional deps but
+# declare scripts that stay blocked unless allowed).
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+  "@tailwindcss/oxide": true
+  pnpm: true

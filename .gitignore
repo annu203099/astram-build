@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+
+# astram runtime artifacts
+*.db
+*.db-shm
+*.db-wal
+*.slab
+.astram/
+
+# build caches
+.vite/
+coverage/
+
+# OS noise
+.DS_Store
+Thumbs.db

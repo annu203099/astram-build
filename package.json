@@ -1,0 +1,26 @@
+{
+  "name": "astram",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "description": "astram — Universal Security Microkernel & MCP Firewall for AI coding agents (Windows-native, 16GB RAM / 4GB VRAM budget)",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "vitest run",
+    "test:unit": "vitest run packages",
+    "test:e2e-attacks": "vitest run testbed-attacks",
+    "dev": "pnpm --filter @astram/server run dev",
+    "start": "pnpm --filter @astram/server run start",
+    "protect": "pnpm --filter @astram/mcp-proxy run protect-local"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "pnpm": "^12.8.1"
+  }
+}

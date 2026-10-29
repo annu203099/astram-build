@@ -1,0 +1,8 @@
+# Deterministic LF everywhere — Cordis Fiber diffs (Tier 2) must never contain
+# CRLF churn. Binary types pinned explicitly.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
