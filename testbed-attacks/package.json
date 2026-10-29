@@ -1,0 +1,18 @@
+{
+  "name": "@astram/testbed-attacks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "5 harmless Black-October attack simulations — pnpm test:e2e-attacks",
+  "dependencies": {
+    "@astram/db": "workspace:*",
+    "@astram/gatekeeper": "workspace:*",
+    "@astram/mcp-proxy": "workspace:*",
+    "@astram/server": "workspace:*",
+    "@astram/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "vitest": "^3.0.0"
+  }
+}

