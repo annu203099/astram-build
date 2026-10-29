@@ -1,0 +1,31 @@
+{
+  "name": "@astram/mcp-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "bin": {
+    "astram": "./dist/cli-astram.js",
+    "astram-mcp-proxy": "./dist/cli-proxy.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "protect-local": "tsx src/cli-astram.ts protect"
+  },
+  "dependencies": {
+    "@astram/db": "workspace:*",
+    "@astram/gatekeeper": "workspace:*",
+    "@astram/server": "workspace:*",
+    "@astram/types": "workspace:*",
+    "chokidar": "^4.0.0",
+    "smol-toml": "^1.3.0",
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "vitest": "^3.0.0"
+  }
+}
