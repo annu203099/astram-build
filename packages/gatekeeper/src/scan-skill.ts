@@ -12,6 +12,7 @@ import { matchesInjection, tokenizeMarkdown } from './markdown.js';
 import { scanJavascript } from './scan-javascript.js';
 import { scanPythonCode } from './scan-python.js';
 import { scanShellSnippet } from './scan-shell.js';
+import { protectedPathIn } from './util.js';
 
 export interface SkillScanResult {
   file: string;
@@ -40,6 +41,17 @@ export function scanSkillMarkdown(content: string, file: string): SkillScanResul
         line: ol.line,
         snippet: ol.text.trim().slice(0, 200),
         deterministicRisk: RiskLevel.WARN,
+      });
+    }
+    const credHit = protectedPathIn(ol.text);
+    if (credHit.protected) {
+      facts.push({
+        ruleId: 'SKILL_CRED_ACCESS',
+        category: 'CRED_ACCESS',
+        file,
+        line: ol.line,
+        snippet: ol.text.trim().slice(0, 200),
+        deterministicRisk: RiskLevel.HOLD,
       });
     }
   }

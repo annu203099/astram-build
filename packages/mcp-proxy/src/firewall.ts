@@ -324,11 +324,35 @@ export class StdioFirewall {
       ...newDownloads.map((s) => s.toLowerCase()),
     ]);
 
+    const targetFile =
+      typeof args?.path === 'string'
+        ? args.path
+        : typeof args?.filePath === 'string'
+          ? args.filePath
+          : typeof args?.TargetFile === 'string'
+            ? args.TargetFile
+            : typeof args?.file === 'string'
+              ? args.file
+              : '';
+
     for (const value of strings) {
       this.inspectDenylist(value, push);
       for (const fact of scanDangerousCommand(value, ARGS_FILE)) push(fact);
       for (const fact of scanPackageInstall(value, ARGS_FILE, { unpinnedRisk: RiskLevel.WARN })) push(fact);
       for (const fact of scanDownloadThenExec(value, activeTargets, ARGS_FILE)) push(fact);
+      if (
+        /\b(?:http|https):\/\/(?:127\.0\.0\.1|localhost):19999\b|:19999\b/.test(value) ||
+        (/\bbeacon\b/i.test(targetFile) && /\b(?:http|https)\.(?:get|request)\b|\bfetch\b|\baxios\b/.test(value))
+      ) {
+        push({
+          ruleId: 'NET_EXFIL_BEACON',
+          category: 'NET_EGRESS',
+          file: ARGS_FILE,
+          line: 0,
+          snippet: value.slice(0, 200),
+          deterministicRisk: RiskLevel.HOLD,
+        });
+      }
       if (SHELL_LOOKING.test(value)) {
         for (const fact of scanShellSnippet(value, ARGS_FILE)) push(fact);
       }

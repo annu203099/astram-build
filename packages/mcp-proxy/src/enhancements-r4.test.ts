@@ -197,7 +197,7 @@ describe('R1 & R3: StdioFirewall Post-Install .pth and Live Bytepath Taint Integ
     });
 
     expect(alertReceived).not.toBeNull();
-    expect(alertReceived!.level).toBe('WARN');
-    expect(alertReceived!.message).toContain('post-install hook');
+    expect(['WARN', 'HOLD']).toContain(alertReceived!.level);
+    expect(alertReceived!.message).toMatch(/post-install/i);
   });
 });

@@ -153,7 +153,11 @@ function scanJavascriptFallback(code: string, file: string, lines: string[]): As
     }
 
     // JS_NET_EGRESS
-    if (/\b(?:fetch|axios)\s*\(|\b(?:http|https)\.request\s*\(|\bnet\.connect\s*\(|\b(?:require|from)\s*\(?.*['"](?:axios|urllib)['"]/.test(line)) {
+    if (
+      /\b(?:fetch|axios)\s*\(|\b(?:http|https)\.(?:request|get)\s*\(|\brequire\s*\(\s*['"](?:node:)?(?:http|https)['"]\s*\)\.(?:request|get)\s*\(|\bnet\.connect\s*\(|\b(?:require|from)\s*\(?.*['"](?:axios|urllib)['"]/.test(
+        line
+      )
+    ) {
       pushFallback('JS_NET_EGRESS', 'NET_EGRESS', RiskLevel.WARN, lineNo);
     }
 
@@ -266,17 +270,25 @@ export function scanJavascript(code: string, file: string): AstCapabilityFact[] 
           }
         } else if (callee?.type === 'MemberExpression') {
           const prop = memberPropertyName(callee);
-          const objName =
+          let objName: string | null =
             (callee.object as AnyNode | undefined)?.type === 'Identifier'
               ? ((callee.object as { name: string }).name)
               : null;
+          if (
+            !objName &&
+            (callee.object as AnyNode | undefined)?.type === 'CallExpression' &&
+            ((callee.object as AnyNode).callee as AnyNode | undefined)?.name === 'require'
+          ) {
+            const reqArg = stringValuesOf(((callee.object as AnyNode).arguments as AnyNode[])?.[0])[0];
+            if (reqArg) objName = reqArg.replace(/^node:/, '');
+          }
           if (prop === 'eval') push('JS_DYNAMIC_EVAL', 'DYNAMIC_EVAL', RiskLevel.WARN, n);
           else if (prop !== null && VM_RUN_METHODS.has(prop)) {
             push('JS_DYNAMIC_EVAL', 'DYNAMIC_EVAL', RiskLevel.WARN, n);
           } else if (
             objName !== null &&
             prop !== null &&
-            (((objName === 'http' || objName === 'https') && prop === 'request') ||
+            (((objName === 'http' || objName === 'https') && (prop === 'request' || prop === 'get')) ||
               (objName === 'net' && prop === 'connect') ||
               objName === 'axios' ||
               objName === 'urllib')

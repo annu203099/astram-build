@@ -23,3 +23,9 @@ target/
 # OS noise
 .DS_Store
 Thumbs.db
+*.zip
+
+# Keep test pack files tracked
+!astram-test-pack/**/.env
+!astram-test-pack/**/.agents
+!astram-test-pack/**/.agents/**

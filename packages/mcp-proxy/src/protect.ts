@@ -8,7 +8,7 @@
  * every unwrapped mcpServers entry through astram-mcp-proxy and is idempotent.
  * Binding contract: docs/CONTRACTS.md §6.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,16 @@ import { defaultLedgerPath, type LedgerDb } from '@astram/db';
 import { isProtectedPath, maxDeterministicRisk, riskToName, RiskLevel } from '@astram/types';
 import type { AgentHost, AstCapabilityFact } from '@astram/types';
 import { scanDangerousCommand } from './dangerous-commands.js';
-import { scanLockfile } from '@astram/gatekeeper';
+import {
+  scanLockfile,
+  scanPythonPth,
+  scanSkillMarkdown,
+  analyzeBytePathJs,
+  analyzeBytePathPython,
+  analyzeBytePathRuby,
+  analyzeBytePathPhp,
+  taintFactsFromSinks,
+} from '@astram/gatekeeper';
 import { redactSecrets } from './redact.js';
 
 export interface McpServerEntry {
@@ -244,22 +253,59 @@ function recordBoardingItem(
   }
 }
 
+function walkProjectFiles(dir: string, maxDepth = 4, currentDepth = 0): string[] {
+  if (currentDepth > maxDepth || !existsSync(dir)) return [];
+  const entries: string[] = [];
+  try {
+    const items = readdirSync(dir);
+    for (const item of items) {
+      if (
+        item === 'node_modules' ||
+        item === '.git' ||
+        item === '.venv' ||
+        item === 'dist' ||
+        item === 'build' ||
+        item === 'target' ||
+        item === '.next'
+      ) {
+        continue;
+      }
+      const full = path.join(dir, item);
+      try {
+        const stat = statSync(full);
+        if (stat.isDirectory()) {
+          entries.push(...walkProjectFiles(full, maxDepth, currentDepth + 1));
+        } else if (stat.isFile()) {
+          entries.push(full);
+        }
+      } catch {
+        /* skip unreadable */
+      }
+    }
+  } catch {
+    /* skip unreadable */
+  }
+  return entries;
+}
+
 /**
- * Scans workspace lockfiles (requirements.txt, pyproject.toml, package-lock.json, pnpm-lock.yaml)
- * and records any identified facts into the Slowship Boarding Manifest in SQLite.
+ * Scans workspace lockfiles, .pth startup hooks, agent skills, and byte-path
+ * taint sinks, recording identified facts into the Slowship Boarding Manifest in SQLite.
  */
 export function recordLockfileBoardingItems(
   ledger: LedgerDb | null,
   rootDir: string
 ): AstCapabilityFact[] {
   if (!existsSync(rootDir)) return [];
+  const allFacts: AstCapabilityFact[] = [];
+
+  // 1. Lockfiles (category LOCKFILE_PKG)
   const candidates: { file: string; kind: 'pip' | 'pyproject' | 'npm' | 'pnpm' }[] = [
     { file: path.join(rootDir, 'requirements.txt'), kind: 'pip' },
     { file: path.join(rootDir, 'pyproject.toml'), kind: 'pyproject' },
     { file: path.join(rootDir, 'package-lock.json'), kind: 'npm' },
     { file: path.join(rootDir, 'pnpm-lock.yaml'), kind: 'pnpm' },
   ];
-  const allFacts: AstCapabilityFact[] = [];
   for (const c of candidates) {
     if (existsSync(c.file)) {
       try {
@@ -287,6 +333,109 @@ export function recordLockfileBoardingItems(
       }
     }
   }
+
+  // 2. Walk project files for .pth, SKILL.md, and bytepath taint sinks
+  const files = walkProjectFiles(rootDir);
+  for (const fullPath of files) {
+    const rel = path.relative(rootDir, fullPath).replace(/\\/g, '/');
+    const lower = rel.toLowerCase();
+
+    // (a) Python startup .pth files (category LOCKFILE_PKG)
+    if (lower.endsWith('.pth')) {
+      try {
+        const content = readFileSync(fullPath, 'utf8');
+        const facts = scanPythonPth(content, fullPath);
+        allFacts.push(...facts);
+        if (ledger && facts.length > 0) {
+          const maxRisk = maxDeterministicRisk(facts);
+          const status = riskToName(maxRisk);
+          ledger.upsertBoardingItem({
+            itemId: `pth:${rel}`,
+            category: 'LOCKFILE_PKG',
+            targetName: rel,
+            deterministicStatus: status,
+            jevApiAdjustment: 0,
+            finalStatus: status,
+            evidenceSummary: facts.map((f) => f.snippet).slice(0, 3).join('; '),
+            astFactsJson: JSON.stringify(facts),
+            ed25519Sig: null,
+            updatedAtMs: Date.now(),
+          });
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+
+    // (b) Agent skill files (category AGENT_SKILL)
+    if (lower.endsWith('skill.md')) {
+      try {
+        const content = readFileSync(fullPath, 'utf8');
+        const res = scanSkillMarkdown(content, fullPath);
+        allFacts.push(...res.facts);
+        if (ledger && res.facts.length > 0) {
+          const maxRisk = maxDeterministicRisk(res.facts);
+          const status = riskToName(maxRisk);
+          ledger.upsertBoardingItem({
+            itemId: `skill:${rel}`,
+            category: 'AGENT_SKILL',
+            targetName: rel,
+            deterministicStatus: status,
+            jevApiAdjustment: 0,
+            finalStatus: status,
+            evidenceSummary: res.facts.map((f) => f.snippet).slice(0, 3).join('; '),
+            astFactsJson: JSON.stringify(res.facts),
+            ed25519Sig: null,
+            updatedAtMs: Date.now(),
+          });
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+
+    // (c) Bytepath taint sinks (category BYTEPATH_SINK)
+    if (
+      lower.endsWith('.js') ||
+      lower.endsWith('.ts') ||
+      lower.endsWith('.rb') ||
+      lower.endsWith('.py') ||
+      lower.endsWith('.php')
+    ) {
+      try {
+        const content = readFileSync(fullPath, 'utf8');
+        let sinks: ReturnType<typeof analyzeBytePathJs> = [];
+        if (lower.endsWith('.js') || lower.endsWith('.ts')) sinks = analyzeBytePathJs(content, fullPath);
+        else if (lower.endsWith('.rb')) sinks = analyzeBytePathRuby(content, fullPath);
+        else if (lower.endsWith('.py')) sinks = analyzeBytePathPython(content, fullPath);
+        else if (lower.endsWith('.php')) sinks = analyzeBytePathPhp(content, fullPath);
+
+        if (sinks.length > 0) {
+          const facts = taintFactsFromSinks(sinks, fullPath);
+          allFacts.push(...facts);
+          if (ledger && facts.length > 0) {
+            const maxRisk = maxDeterministicRisk(facts);
+            const status = riskToName(maxRisk);
+            ledger.upsertBoardingItem({
+              itemId: `taint:${rel}`,
+              category: 'BYTEPATH_SINK',
+              targetName: rel,
+              deterministicStatus: status,
+              jevApiAdjustment: 0,
+              finalStatus: status,
+              evidenceSummary: sinks.map((s) => s.detail || s.snippet).slice(0, 3).join('; '),
+              astFactsJson: JSON.stringify(facts),
+              ed25519Sig: null,
+              updatedAtMs: Date.now(),
+            });
+          }
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
   return allFacts;
 }
 
