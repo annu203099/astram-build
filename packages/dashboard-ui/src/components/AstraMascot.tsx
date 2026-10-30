@@ -161,12 +161,30 @@ export function CustomerFeedbackModal({
 }: CustomerFeedbackModalProps): JSX.Element | null {
   const [sentiment, setSentiment] = useState<'positive' | 'neutral' | 'issue'>('positive');
   const [comment, setComment] = useState('');
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
   const [submitted, setSubmitted] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      const existing = JSON.parse(localStorage.getItem('astram_customer_feedbacks') || '[]');
+      const newEntry = {
+        id: `fb-${Date.now()}`,
+        sentiment,
+        comment,
+        timestamp: new Date().toISOString(),
+        diagnosticSnapshot: includeDiagnostics
+          ? {
+              screen: `${window.innerWidth}x${window.innerHeight}`,
+              userAgent: navigator.userAgent,
+            }
+          : null,
+      };
+      localStorage.setItem('astram_customer_feedbacks', JSON.stringify([newEntry, ...existing].slice(0, 50)));
+    } catch {}
+
     onSubmitFeedback(sentiment, comment);
     setSubmitted(true);
     setTimeout(() => {
@@ -277,6 +295,16 @@ export function CustomerFeedbackModal({
                   className="w-full rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/30 resize-none font-sans"
                 />
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-white/60 hover:text-white/80">
+                <input
+                  type="checkbox"
+                  checked={includeDiagnostics}
+                  onChange={(e) => setIncludeDiagnostics(e.target.checked)}
+                  className="rounded border-white/20 bg-white/5 text-white focus:ring-0"
+                />
+                <span>Include anonymized client diagnostics for issue tracing</span>
+              </label>
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button

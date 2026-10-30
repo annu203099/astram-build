@@ -28,6 +28,7 @@ import { OnboardingWizard } from './components/OnboardingWizard';
 import { ToastStack, type Toast } from './components/ToastStack';
 import { DynamicNotch } from './components/DynamicNotch';
 import { CustomerFeedbackModal } from './components/AstraMascot';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { AlertItem } from './components/AlertBanner';
 import { api } from './lib/api';
 import { useTelemetry } from './lib/useTelemetry';
@@ -64,6 +65,7 @@ export function App(): JSX.Element {
     return localStorage.getItem('astram_onboarding_completed') !== 'true';
   });
   const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string): void => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -186,6 +188,57 @@ export function App(): JSX.Element {
     );
   };
 
+  // ---- Global Apple Keyboard Shortcuts ---------------------------------------
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      // If user is focused on an editable element, don't hijack keys except Escape
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      if (e.key === 'Escape') {
+        setShowShortcutsModal(false);
+        setShowFeedbackModal(false);
+        setShowWizard(false);
+        return;
+      }
+
+      if (isInput) return;
+
+      const isMeta = e.metaKey || e.ctrlKey;
+
+      if (isMeta && e.key === '1') {
+        e.preventDefault();
+        setTab('manifest');
+      } else if (isMeta && e.key === '2') {
+        e.preventDefault();
+        setTab('feed');
+      } else if (isMeta && e.key === '3') {
+        e.preventDefault();
+        setTab('inspector');
+      } else if (isMeta && e.key === '4') {
+        e.preventDefault();
+        setTab('dag3d');
+      } else if (isMeta && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setShowFeedbackModal((prev) => !prev);
+      } else if ((isMeta && (e.key === '/' || e.key === '?')) || (!isMeta && e.key === '?')) {
+        e.preventDefault();
+        setShowShortcutsModal((prev) => !prev);
+      } else if (isMeta && e.key.toLowerCase() === 'z') {
+        // Rollback latest threat
+        const threatTx = txs.find((t) => t.verdict === 'HOLD');
+        if (threatTx) {
+          e.preventDefault();
+          rollback(threatTx.txId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [txs, rollback]);
+
   const manifestItems = Object.values(manifest).sort((a, b) => b.updatedAtMs - a.updatedAtMs);
 
   return (
@@ -207,6 +260,7 @@ export function App(): JSX.Element {
         wsState={wsState}
         onOpenWizard={() => setShowWizard(true)}
         onOpenFeedback={() => setShowFeedbackModal(true)}
+        onOpenShortcuts={() => setShowShortcutsModal((prev) => !prev)}
       />
 
       {/* Onboarding Wizard Sheet */}
@@ -226,6 +280,12 @@ export function App(): JSX.Element {
         isOpen={showFeedbackModal}
         onClose={() => setShowFeedbackModal(false)}
         onSubmitFeedback={handleFeedbackSubmit}
+      />
+
+      {/* Keyboard Shortcuts Sheet */}
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
       />
 
       {/* Apple-style Segmented Navigation Control */}

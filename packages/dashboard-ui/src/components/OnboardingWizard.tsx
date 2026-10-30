@@ -670,7 +670,7 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                 <div className="space-y-4 rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-5">
                   <div className="flex items-center gap-2.5 text-emerald-300">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-sm font-bold">
-                      ✓
+                      <Check size={14} className="stroke-[2.5]" />
                     </span>
                     <h4 className="font-semibold text-emerald-200">
                       Astram Protection Successfully Applied!

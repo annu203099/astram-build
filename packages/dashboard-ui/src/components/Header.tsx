@@ -4,7 +4,7 @@
  */
 
 import type { JSX } from 'react';
-import { Sliders, MessageSquare } from 'lucide-react';
+import { Sliders, MessageSquare, Command } from 'lucide-react';
 
 export interface HealthState {
   up: boolean;
@@ -16,11 +16,13 @@ export function Header({
   wsState,
   onOpenWizard,
   onOpenFeedback,
+  onOpenShortcuts,
 }: {
   health: HealthState | null;
   wsState: 'connecting' | 'open' | 'reconnecting';
   onOpenWizard?: () => void;
   onOpenFeedback?: () => void;
+  onOpenShortcuts?: () => void;
 }): JSX.Element {
   const isUp = health?.up === true;
 
@@ -47,6 +49,18 @@ export function Header({
 
         {/* Right: Micro Controls */}
         <div className="flex items-center gap-3 text-xs">
+          {onOpenShortcuts && (
+            <button
+              type="button"
+              onClick={onOpenShortcuts}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/60 hover:text-white border border-white/[0.08] text-xs font-mono transition cursor-pointer"
+              title="Keyboard Shortcuts (⌘/ or ?)"
+            >
+              <Command size={12} className="stroke-[1.8]" />
+              <span className="hidden sm:inline text-[11px]">⌘/</span>
+            </button>
+          )}
+
           {onOpenFeedback && (
             <button
               type="button"
