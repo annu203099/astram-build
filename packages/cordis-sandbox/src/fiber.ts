@@ -419,19 +419,17 @@ export class Fiber {
 
     // 4. discard the worktree
     try {
-      await runCapture(
+      const rmRes = await runCapture(
         'git',
         ['-C', this.repoRoot, 'worktree', 'remove', '--force', this.worktreePath],
         { cwd: this.repoRoot, timeoutMs: GIT_TIMEOUT_MS },
       );
-    } catch {
-      /* guarded */
-    }
-    try {
-      await runCapture('git', ['-C', this.repoRoot, 'worktree', 'prune'], {
-        cwd: this.repoRoot,
-        timeoutMs: GIT_TIMEOUT_MS,
-      });
+      if (rmRes.code !== 0) {
+        await runCapture('git', ['-C', this.repoRoot, 'worktree', 'prune'], {
+          cwd: this.repoRoot,
+          timeoutMs: GIT_TIMEOUT_MS,
+        });
+      }
     } catch {
       /* guarded */
     }

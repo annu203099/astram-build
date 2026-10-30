@@ -136,11 +136,13 @@ describe('R1 & R3: StdioFirewall Post-Install .pth and Live Bytepath Taint Integ
     const fw = new StdioFirewall({ agentHost: 'antigravity', serverId: 'eval-tool' });
     const verdict = await fw.inspectToolCall('run_script', {
       code: `
+        const express = require('express');
         const zlib = require('zlib');
-        const fs = require('fs');
-        const data = fs.readFileSync('payload.br');
-        const uncompressed = zlib.brotliDecompressSync(data);
-        eval(uncompressed.toString());
+        const app = express();
+        app.post('/upload', (req, res) => {
+          const d = zlib.createBrotliDecompress();
+          req.pipe(d).pipe(res);
+        });
       `,
     });
 

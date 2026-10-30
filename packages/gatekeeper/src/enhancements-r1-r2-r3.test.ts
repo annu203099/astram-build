@@ -138,11 +138,13 @@ describe('R2: TypeScript Parsing Resilience (Gatekeeper)', () => {
 describe('R3: Live Bytepath Taint Tracking Integration in evaluateArtifact', () => {
   it('evaluates JS Brotli RCE dataflow sink as RiskLevel.HOLD in evaluateArtifact', async () => {
     const jsBrotliCode = `
-      import zlib from 'zlib';
-      import fs from 'fs';
-      const compressed = fs.readFileSync('payload.br');
-      const decompressed = zlib.brotliDecompressSync(compressed);
-      eval(decompressed.toString());
+      const express = require('express');
+      const zlib = require('zlib');
+      const app = express();
+      app.post('/upload', (req, res) => {
+        const d = zlib.createBrotliDecompress();
+        req.pipe(d).pipe(res);
+      });
     `;
 
     const verdict = await evaluateArtifact({
