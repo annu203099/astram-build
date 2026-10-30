@@ -8,8 +8,17 @@ export { scanShellSnippet } from './scan-shell.js';
 export { scanPythonCode, scanPythonPth } from './scan-python.js';
 export { scanSkillMarkdown } from './scan-skill.js';
 export type { SkillScanResult } from './scan-skill.js';
-export { scanLockfile } from './lockfile.js';
+export { scanLockfile, matchesVersionRange } from './lockfile.js';
 export type { LockfileKind } from './lockfile.js';
+export {
+  scanPackageInstallCommand,
+  normalizePythonPackageName,
+  normalizeNpmPackageName,
+  packageNamesMatch,
+  evaluateVersionMatch,
+  extractPackageCommands,
+} from './scan-package-command.js';
+export type { PackageManagerKind, ParsedPackageSpec, ParsedPackageCommand } from './scan-package-command.js';
 export { JevDecisionClient } from './jev-decision-client.js';
 export type { JevClientOptions, JevEvaluationResult } from './jev-decision-client.js';
 export { evaluateArtifact } from './evaluate.js';

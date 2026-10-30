@@ -36,6 +36,18 @@ interface LineBuf {
 }
 
 function spawnProxy(args: string[], env: NodeJS.ProcessEnv): ChildProcess {
+  try {
+    const tsxCli = fileURLToPath(new URL('../../../node_modules/tsx/dist/cli.mjs', import.meta.url));
+    if (existsSync(tsxCli)) {
+      return spawn(process.execPath, [tsxCli, 'packages/mcp-proxy/src/cli-proxy.ts', ...args], {
+        cwd: REPO_ROOT,
+        env,
+        shell: false,
+      });
+    }
+  } catch {
+    /* fallback to pnpm */
+  }
   const full = ['pnpm', 'exec', 'tsx', 'packages/mcp-proxy/src/cli-proxy.ts', ...args];
   // Windows: pnpm is a .cmd shim — spawn it through cmd.exe (still shell-free
   // as far as the proxy's own target spawn is concerned; that one is shell:false).

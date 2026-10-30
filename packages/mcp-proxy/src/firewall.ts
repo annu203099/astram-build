@@ -27,6 +27,7 @@ import type { JevDecisionClient } from '@astram/gatekeeper';
 import { scanJavascript, scanPythonCode, scanShellSnippet } from '@astram/gatekeeper';
 import type { LedgerDb } from '@astram/db';
 import { scanDangerousCommand } from './dangerous-commands.js';
+import { scanPackageInstall } from './package-install.js';
 import { INJECTION_NOTICE, detectInjection } from './injection.js';
 import { compactMcpResult, redactSecrets, stripAnsi, truncateUtf8Safe } from './redact.js';
 
@@ -162,6 +163,7 @@ export class StdioFirewall {
     for (const value of strings) {
       this.inspectDenylist(value, push);
       for (const fact of scanDangerousCommand(value, ARGS_FILE)) push(fact);
+      for (const fact of scanPackageInstall(value, ARGS_FILE)) push(fact);
       if (SHELL_LOOKING.test(value)) {
         for (const fact of scanShellSnippet(value, ARGS_FILE)) push(fact);
       }

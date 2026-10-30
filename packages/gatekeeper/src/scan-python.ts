@@ -60,8 +60,15 @@ export function scanPythonCode(code: string, file: string): AstCapabilityFact[] 
 const PTH_PLAIN_IMPORT = /^import\s+[A-Za-z_][A-Za-z0-9_.]*\s*$/;
 const PTH_ENV_READ = /\bos\.environ\b|\bos\.getenv\s*\(|AEGIS_CANARY_SECRET_[A-Za-z0-9_]+/;
 const PTH_NET_EGRESS = /\burllib\.request\b|\brequests\.|\bsocket\.|\bhttpx\b|\burlopen\b/;
+const PTH_DIRECTORY_PATH = /^[A-Za-z0-9_.\-\\/:~\s]+$/;
+const KNOWN_SAFE_PTH_FILES = new Set(['distutils-precedence.pth', 'easy-install.pth', 'setuptools.pth']);
 
 export function scanPythonPth(content: string, file: string): AstCapabilityFact[] {
+  const baseName = file.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? '';
+  if (KNOWN_SAFE_PTH_FILES.has(baseName)) {
+    return [];
+  }
+
   // Pure string ops only — TEST-01 timing budget is < 50 ms.
   const facts: AstCapabilityFact[] = scanPythonCode(content, file);
   const lines = content.split('\n');
@@ -72,16 +79,35 @@ export function scanPythonPth(content: string, file: string): AstCapabilityFact[
     const trimmed = lines[i].trim();
     const lineNo = i + 1;
     if (trimmed === '' || trimmed.startsWith('#')) continue;
-    if (!PTH_PLAIN_IMPORT.test(trimmed)) {
-      facts.push({
-        ruleId: 'PY_PTH_CODE',
-        category: 'STARTUP_HOOK',
-        file,
-        line: lineNo,
-        snippet: trimmed.slice(0, 200),
-        deterministicRisk: RiskLevel.HOLD,
-      });
+
+    // In Python site.py: lines starting with 'import ' are executed.
+    // Lines not starting with 'import ' are treated as directory paths unless they carry code.
+    const isImport = trimmed.startsWith('import ') || trimmed.startsWith('import\t');
+    if (isImport) {
+      if (!PTH_PLAIN_IMPORT.test(trimmed)) {
+        facts.push({
+          ruleId: 'PY_PTH_CODE',
+          category: 'STARTUP_HOOK',
+          file,
+          line: lineNo,
+          snippet: trimmed.slice(0, 200),
+          deterministicRisk: RiskLevel.HOLD,
+        });
+      }
+    } else {
+      // Directory path check: if not a clean filesystem path, treat as embedded code
+      if (!PTH_DIRECTORY_PATH.test(trimmed)) {
+        facts.push({
+          ruleId: 'PY_PTH_CODE',
+          category: 'STARTUP_HOOK',
+          file,
+          line: lineNo,
+          snippet: trimmed.slice(0, 200),
+          deterministicRisk: RiskLevel.HOLD,
+        });
+      }
     }
+
     if (!envLine && PTH_ENV_READ.test(trimmed)) envLine = lineNo;
     if (!netLine && PTH_NET_EGRESS.test(trimmed)) netLine = lineNo;
   }

@@ -62,9 +62,25 @@ describe('scanPythonCode — PY_NET_EGRESS (NET_EGRESS WARN)', () => {
 });
 
 describe('scanPythonPth', () => {
-  it('benign .pth (comments, blanks, plain single imports) yields no facts', () => {
-    const benign = ['# installed by pip', '', 'import os', '   ', '# another comment'].join('\n');
+  it('benign .pth (comments, blanks, plain single imports, and directory paths) yields no facts', () => {
+    const benign = [
+      '# installed by pip',
+      '',
+      'import os',
+      '   ',
+      '# directory paths to add to sys.path',
+      'src',
+      'packages/my_lib',
+      'C:\\Python311\\Lib\\site-packages',
+      '/usr/local/lib/python3.11/dist-packages',
+      '# another comment',
+    ].join('\n');
     expect(scanPythonPth(benign, 'x.pth')).toEqual([]);
+  });
+
+  it('exempts known safe system .pth files like distutils-precedence.pth', () => {
+    const content = 'import os\nif os.environ.get("SETUPTOOLS_USE_DISTUTILS") != "stdlib":\n    import distutils';
+    expect(scanPythonPth(content, 'distutils-precedence.pth')).toEqual([]);
   });
 
   it('PY_PTH_CODE (STARTUP_HOOK HOLD): multi-module import and any code line', () => {

@@ -22,26 +22,49 @@ import { KNOWN_BAD_PACKAGES, type AstCapabilityFact } from '@astram/types';
 
 export type LockfileKind = 'npm' | 'pnpm' | 'pip' | 'pyproject';
 
+export function matchesVersionRange(version: string, range: string): boolean {
+  const v = coerce(version.split('(')[0].trim());
+  return !!(v && satisfies(v, range));
+}
+
 interface DepRef {
   name: string;
   version: string;
   line: number; // 1-based; 1 for structured formats without a meaningful line
 }
 
+function normalizeName(s: string): string {
+  return s.trim().toLowerCase().replace(/[-_.]+/g, '');
+}
+
 function checkDeps(deps: DepRef[], file: string): AstCapabilityFact[] {
   const facts: AstCapabilityFact[] = [];
   const seen = new Set<string>();
   for (const dep of deps) {
-    const name = dep.name.trim().toLowerCase();
-    if (!name || !dep.version) continue;
+    const rawName = dep.name.trim();
+    if (!rawName) continue;
+    const normName = normalizeName(rawName);
     for (const pkg of KNOWN_BAD_PACKAGES) {
-      if (pkg.name.toLowerCase() !== name) continue;
-      const v = coerce(dep.version.split('(')[0].trim());
-      if (!v || !satisfies(v, pkg.versionRange)) continue;
-      const key = `${pkg.name}@${v.version}`;
+      if (normalizeName(pkg.name) !== normName) continue;
+
+      let matches = false;
+      let displayVer = dep.version || 'unpinned';
+
+      if (!dep.version || dep.version === 'unpinned' || dep.version === '*') {
+        matches = true;
+      } else {
+        const v = coerce(dep.version.split('(')[0].trim());
+        if (v && satisfies(v, pkg.versionRange)) {
+          matches = true;
+          displayVer = v.version;
+        }
+      }
+
+      if (!matches) continue;
+      const key = `${pkg.name}@${displayVer}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const snippet = `${dep.name}@${v.version} matches ${pkg.advisoryId} (${pkg.name} ${pkg.versionRange}: ${pkg.reason})`.slice(0, 200);
+      const snippet = `${dep.name}@${displayVer} matches ${pkg.advisoryId} (${pkg.name} ${pkg.versionRange}: ${pkg.reason})`.slice(0, 200);
       facts.push({
         ruleId: 'LOCKFILE_KNOWN_BAD',
         category: 'STARTUP_HOOK',
@@ -184,6 +207,7 @@ function depsFromRequirements(content: string): DepRef[] {
       if (loose) version = loose[1];
     }
     if (version) deps.push({ name, version, line: i + 1 });
+    else deps.push({ name, version: 'unpinned', line: i + 1 });
   }
   return deps;
 }

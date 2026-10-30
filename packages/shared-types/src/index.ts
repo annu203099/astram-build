@@ -77,7 +77,8 @@ export type CapabilityCategory =
   | 'CRED_ACCESS'
   | 'NET_EGRESS'
   | 'STARTUP_HOOK'
-  | 'BYTEPATH_SINK';
+  | 'BYTEPATH_SINK'
+  | 'DEP_SUPPLY_CHAIN';
 
 export interface AstCapabilityFact {
   ruleId: string;
@@ -251,6 +252,62 @@ export const KNOWN_BAD_PACKAGES: readonly KnownBadPackage[] = [
     reason: 'Installs evil .pth startup hook exfiltrating credentials on interpreter startup (Black October)',
     risk: RiskLevel.HOLD,
     advisoryId: 'AEGIS-BB-LITELLM-1.107.0',
+  },
+  {
+    name: 'event-stream',
+    versionRange: '3.3.6',
+    reason: 'Compromised npm release with injected flatmap-stream targeting Copay bitcoin wallet',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'AEGIS-NPM-EVENT-STREAM-3.3.6',
+  },
+  {
+    name: 'flatmap-stream',
+    versionRange: '0.1.1',
+    reason: 'Malicious package injected into event-stream containing encrypted payload',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'AEGIS-NPM-FLATMAP-STREAM-0.1.1',
+  },
+  {
+    name: 'ctx',
+    versionRange: '<=0.2.6',
+    reason: 'Hijacked PyPI package exfiltrating environment variables and AWS credentials',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'AEGIS-PYPI-CTX-0.2.6',
+  },
+  {
+    name: 'colourama',
+    versionRange: '<=0.1.0',
+    reason: 'Typosquatting of colorama package dropping info-stealer malware',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'AEGIS-PYPI-COLOURAMA-0.1.0',
+  },
+  {
+    name: 'requests-oauth',
+    versionRange: '<=0.4.1',
+    reason: 'Typosquatting of requests-oauthlib targeting credential theft',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'AEGIS-PYPI-REQUESTS-OAUTH-0.4.1',
+  },
+  {
+    name: 'reqeusts',
+    versionRange: '*',
+    reason: 'Typosquatting attack against requests library delivering credential stealer',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'MAL-2024-REQ-001',
+  },
+  {
+    name: 'colorama-v2',
+    versionRange: '*',
+    reason: 'Malicious colorama impersonation executing obfuscated payload in setup.py',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'MAL-2024-COLOR-002',
+  },
+  {
+    name: 'discord-selfbot-v13',
+    versionRange: '*',
+    reason: 'Token grabber malware embedded in fake Discord API client',
+    risk: RiskLevel.HOLD,
+    advisoryId: 'MAL-2024-DISC-003',
   },
 ];
 

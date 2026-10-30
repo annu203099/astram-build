@@ -18,6 +18,7 @@ import { defaultLedgerPath, type LedgerDb } from '@astram/db';
 import { isProtectedPath, maxDeterministicRisk, riskToName, RiskLevel } from '@astram/types';
 import type { AgentHost, AstCapabilityFact } from '@astram/types';
 import { scanDangerousCommand } from './dangerous-commands.js';
+import { scanLockfile } from '@astram/gatekeeper';
 import { redactSecrets } from './redact.js';
 
 export interface McpServerEntry {
@@ -244,6 +245,52 @@ function recordBoardingItem(
 }
 
 /**
+ * Scans workspace lockfiles (requirements.txt, pyproject.toml, package-lock.json, pnpm-lock.yaml)
+ * and records any identified facts into the Slowship Boarding Manifest in SQLite.
+ */
+export function recordLockfileBoardingItems(
+  ledger: LedgerDb | null,
+  rootDir: string
+): AstCapabilityFact[] {
+  if (!existsSync(rootDir)) return [];
+  const candidates: { file: string; kind: 'pip' | 'pyproject' | 'npm' | 'pnpm' }[] = [
+    { file: path.join(rootDir, 'requirements.txt'), kind: 'pip' },
+    { file: path.join(rootDir, 'pyproject.toml'), kind: 'pyproject' },
+    { file: path.join(rootDir, 'package-lock.json'), kind: 'npm' },
+    { file: path.join(rootDir, 'pnpm-lock.yaml'), kind: 'pnpm' },
+  ];
+  const allFacts: AstCapabilityFact[] = [];
+  for (const c of candidates) {
+    if (existsSync(c.file)) {
+      try {
+        const content = readFileSync(c.file, 'utf8');
+        const facts = scanLockfile(content, c.kind, c.file);
+        allFacts.push(...facts);
+        if (ledger && facts.length > 0) {
+          const maxRisk = maxDeterministicRisk(facts);
+          const status = riskToName(maxRisk);
+          ledger.upsertBoardingItem({
+            itemId: `lockfile:${path.basename(c.file)}`,
+            category: 'LOCKFILE_PKG',
+            targetName: path.basename(c.file),
+            deterministicStatus: status,
+            jevApiAdjustment: 0,
+            finalStatus: status,
+            evidenceSummary: facts.map((f) => f.snippet).slice(0, 3).join('; '),
+            astFactsJson: JSON.stringify(facts),
+            ed25519Sig: null,
+            updatedAtMs: Date.now(),
+          });
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+  return allFacts;
+}
+
+/**
  * Rewrites one config file. Returns the list of newly wrapped server names,
  * or a skip reason when nothing was (or could be) wrapped.
  */
@@ -358,6 +405,12 @@ export async function protectWorkspace(
   const extended = !!(opts?.projectRoots && opts.projectRoots.length > 0);
   const roots = extended ? opts!.projectRoots! : [rootDir];
   const scope = opts?.scope ?? 'both';
+
+  if (scope !== 'global') {
+    for (const r of roots) {
+      recordLockfileBoardingItems(ledger, r);
+    }
+  }
   let targets: TargetSpec[] = [
     ...(scope === 'global' ? [] : roots.flatMap((r) => projectTargetsFor(r))),
     ...(scope === 'project' ? [] : globalTargets),

@@ -15,6 +15,10 @@ dist/
 # build caches
 .vite/
 coverage/
+target/
+**/target/
+**/gen/
+.agents/
 
 # OS noise
 .DS_Store

@@ -98,6 +98,23 @@ describe('scanLockfile — pip (requirements.txt)', () => {
     const facts = scanLockfile('litellm>=1.100,<1.108', 'pip', 'requirements.txt');
     expect(facts).toHaveLength(1);
   });
+
+  it('normalizes python package names per PEP 503 (lite-llm and lite_llm match litellm)', () => {
+    const factsDash = scanLockfile('lite-llm==1.107.0', 'pip', 'requirements.txt');
+    expect(factsDash).toHaveLength(1);
+    expect(factsDash[0]!.ruleId).toBe('LOCKFILE_KNOWN_BAD');
+
+    const factsUnderscore = scanLockfile('lite_llm==1.107.0', 'pip', 'requirements.txt');
+    expect(factsUnderscore).toHaveLength(1);
+    expect(factsUnderscore[0]!.ruleId).toBe('LOCKFILE_KNOWN_BAD');
+  });
+
+  it('flags unpinned malicious package in requirements.txt', () => {
+    const facts = scanLockfile('litellm', 'pip', 'requirements.txt');
+    expect(facts).toHaveLength(1);
+    expect(facts[0]!.ruleId).toBe('LOCKFILE_KNOWN_BAD');
+    expect(facts[0]!.snippet).toContain('unpinned');
+  });
 });
 
 describe('scanLockfile — pyproject (pyproject.toml)', () => {
