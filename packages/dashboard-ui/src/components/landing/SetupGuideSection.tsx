@@ -21,6 +21,7 @@ import {
   RefreshCw,
   ShieldCheck,
   ArrowRight,
+  Download,
 } from 'lucide-react';
 import { appleSpring } from '../../lib/theme';
 
@@ -176,7 +177,7 @@ export function SetupGuideSection({ onLaunchDashboard }: SetupGuideSectionProps)
 
       {/* Main 2-Step Card */}
       <div className="rounded-3xl bg-[#0D0D0F] border border-white/[0.12] p-6 sm:p-10 shadow-2xl space-y-10">
-        {/* Step 1: CLI Quick Start */}
+        {/* Step 1: CLI Quick Start or Desktop Installer */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
@@ -187,26 +188,51 @@ export function SetupGuideSection({ onLaunchDashboard }: SetupGuideSectionProps)
                 Initialize the Astram Daemon & Microkernel Proxy
               </h3>
             </div>
-            <span className="text-[11px] font-mono text-white/40 hidden sm:inline">
-              Zero Global Pollution
-            </span>
+            <a
+              href="https://github.com/annu203099/astram-build/releases/tag/v0.1.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-mono text-white/50 hover:text-white transition hidden sm:inline"
+            >
+              Release v0.1.0 ↗
+            </a>
           </div>
 
-          <div className="relative rounded-2xl bg-black border border-white/[0.1] p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3 font-mono text-xs sm:text-sm text-white overflow-x-auto">
-              <span className="text-[#30D158] select-none">$</span>
-              <span>pnpm dlx @astram/cli protect</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-2xl bg-black border border-white/[0.1] p-4 flex flex-col justify-between gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/90">Option A: Instant CLI Proxy</span>
+                <span className="text-[10px] font-mono text-white/40">Terminal First</span>
+              </div>
+              <div className="flex items-center justify-between font-mono text-xs text-white bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.06]">
+                <span className="truncate"><span className="text-[#30D158] select-none">$ </span>npx @astram/cli protect</span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard('npx @astram/cli protect', true)}
+                  className="ml-2 p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white/80 transition cursor-pointer shrink-0"
+                  title="Copy Command"
+                >
+                  {copiedCli ? <Check size={12} className="text-[#30D158]" /> : <Copy size={12} />}
+                </button>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => copyToClipboard('pnpm dlx @astram/cli protect', true)}
-              className="ml-4 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white/80 hover:text-white border border-white/[0.1] text-xs font-mono transition cursor-pointer shrink-0"
-              title="Copy Command"
-            >
-              {copiedCli ? <Check size={13} className="text-[#30D158]" /> : <Copy size={13} />}
-              <span>{copiedCli ? 'Copied!' : 'Copy'}</span>
-            </button>
+            <div className="rounded-2xl bg-black border border-white/[0.1] p-4 flex flex-col justify-between gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/90">Option B: Windows Setup Installer</span>
+                <span className="text-[10px] font-mono text-[#30D158]">v0.1.0 Ready</span>
+              </div>
+              <div className="flex items-center justify-between bg-white/[0.02] p-2 rounded-xl border border-white/[0.06]">
+                <span className="text-xs text-white/50 pl-1 font-mono">Astram_0.1.0_x64-setup.exe</span>
+                <a
+                  href="https://github.com/annu203099/astram-build/releases/download/v0.1.0/Astram_0.1.0_x64-setup.exe"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black font-semibold text-xs hover:bg-white/90 active:scale-95 transition shadow-sm"
+                >
+                  <Download size={13} className="stroke-[2.2]" />
+                  <span>Download (.exe)</span>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -4,6 +4,7 @@
  */
 
 import type { JSX } from 'react';
+import { Download, ExternalLink } from 'lucide-react';
 
 export function LandingFooter(): JSX.Element {
   const scrollTo = (href: string): void => {
@@ -74,6 +75,22 @@ export function LandingFooter(): JSX.Element {
             >
               FAQ
             </button>
+            <a
+              href="https://github.com/annu203099/astram-build/releases/download/v0.1.0/Astram_0.1.0_x64-setup.exe"
+              className="hover:text-white flex items-center gap-1 text-[#30D158] transition"
+            >
+              <Download size={12} />
+              <span>Download (.exe)</span>
+            </a>
+            <a
+              href="https://github.com/annu203099/astram-build/releases/tag/v0.1.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white flex items-center gap-1 transition"
+            >
+              <ExternalLink size={12} />
+              <span>Release v0.1.0</span>
+            </a>
           </div>
         </div>
 

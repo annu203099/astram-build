@@ -17,6 +17,8 @@ import {
   Lock,
   Cpu,
   Layers,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { appleSpring } from '../../lib/theme';
 
@@ -68,14 +70,22 @@ export function FinalCtaSection({ onLaunchDashboard }: FinalCtaSectionProps): JS
 
           {/* Action Cluster */}
           <div className="pt-4 flex flex-wrap items-center justify-center gap-4">
+            <a
+              href="https://github.com/annu203099/astram-build/releases/download/v0.1.0/Astram_0.1.0_x64-setup.exe"
+              className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white text-black font-semibold text-sm hover:bg-white/90 active:scale-95 transition cursor-pointer shadow-xl"
+            >
+              <Download size={16} className="stroke-[2.2]" />
+              <span>Download Setup (.exe)</span>
+            </a>
+
             <button
               type="button"
               onClick={onLaunchDashboard}
-              className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white text-black font-semibold text-sm hover:bg-white/90 active:scale-95 transition cursor-pointer shadow-xl"
+              className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white/[0.08] hover:bg-white/[0.14] active:scale-95 text-white font-semibold text-sm border border-white/[0.14] transition cursor-pointer shadow-md"
             >
-              <ShieldCheck size={16} className="stroke-[2.2]" />
-              <span>Launch Command Center</span>
-              <ArrowRight size={14} className="stroke-[2.2]" />
+              <ShieldCheck size={16} className="stroke-[2]" />
+              <span>Open Command Center</span>
+              <ArrowRight size={14} className="stroke-[2]" />
             </button>
 
             {/* Quick-Start Terminal Command */}
@@ -92,6 +102,17 @@ export function FinalCtaSection({ onLaunchDashboard }: FinalCtaSectionProps): JS
                 {copied ? <Check size={12} className="text-[#30D158]" /> : <Copy size={12} />}
               </button>
             </div>
+
+            {/* GitHub Releases Link */}
+            <a
+              href="https://github.com/annu203099/astram-build/releases/tag/v0.1.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white border border-white/[0.08] text-xs font-mono transition"
+            >
+              <ExternalLink size={13} />
+              <span>Release v0.1.0</span>
+            </a>
           </div>
 
           {/* Trust Badges */}

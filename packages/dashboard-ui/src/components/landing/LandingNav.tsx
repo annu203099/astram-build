@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import type { JSX } from 'react';
-import { ArrowRight, Terminal, Menu, X } from 'lucide-react';
+import { ArrowRight, Terminal, Menu, X, Download } from 'lucide-react';
 
 export interface LandingNavProps {
   onLaunchDashboard: () => void;
@@ -85,6 +85,17 @@ export function LandingNav({ onLaunchDashboard }: LandingNavProps): JSX.Element 
             <span>npx @astram/cli</span>
           </div>
 
+          <a
+            href="https://github.com/annu203099/astram-build/releases/tag/v0.1.0"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-medium text-xs border border-white/[0.12] transition shadow-sm cursor-pointer"
+            title="Download v0.1.0 Release (.exe)"
+          >
+            <Download size={13} className="stroke-[2] text-[#30D158]" />
+            <span>Download</span>
+          </a>
+
           <button
             type="button"
             onClick={onLaunchDashboard}
@@ -120,6 +131,16 @@ export function LandingNav({ onLaunchDashboard }: LandingNavProps): JSX.Element 
             </a>
           ))}
           <div className="pt-3 border-t border-white/[0.08] flex flex-col gap-2">
+            <a
+              href="https://github.com/annu203099/astram-build/releases/tag/v0.1.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white font-medium text-xs border border-white/[0.12] transition"
+            >
+              <Download size={13} className="text-[#30D158]" />
+              <span>Download v0.1.0 (.exe)</span>
+            </a>
+
             <button
               type="button"
               onClick={() => {

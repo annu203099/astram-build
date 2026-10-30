@@ -17,6 +17,8 @@ import {
   RotateCcw,
   Play,
   RotateCw,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { appleSpring } from '../../lib/theme';
 
@@ -160,26 +162,53 @@ export function HeroSection({ onLaunchDashboard }: HeroSectionProps): JSX.Elemen
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={appleSpring.snappy}
-        className="mt-10 flex flex-wrap items-center justify-center gap-4"
+        className="mt-10 flex flex-col items-center gap-3"
       >
-        <button
-          type="button"
-          onClick={onLaunchDashboard}
-          className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white text-black font-semibold text-sm hover:bg-white/90 active:scale-95 transition cursor-pointer shadow-xl"
-        >
-          <ShieldCheck size={16} className="stroke-[2.2]" />
-          <span>Launch Command Center</span>
-          <ArrowRight size={14} className="stroke-[2.2]" />
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <a
+            href="https://github.com/annu203099/astram-build/releases/download/v0.1.0/Astram_0.1.0_x64-setup.exe"
+            className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white text-black font-semibold text-sm hover:bg-white/90 active:scale-95 transition cursor-pointer shadow-xl"
+          >
+            <Download size={16} className="stroke-[2.2]" />
+            <span>Download for Windows (.exe)</span>
+          </a>
 
-        <button
-          type="button"
-          onClick={scrollToSetup}
-          className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-95 text-white/80 hover:text-white border border-white/[0.12] font-medium text-sm transition cursor-pointer"
-        >
-          <Terminal size={15} className="stroke-[1.8] text-white/60" />
-          <span>60-Second Setup Guide</span>
-        </button>
+          <button
+            type="button"
+            onClick={onLaunchDashboard}
+            className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white/[0.08] hover:bg-white/[0.14] active:scale-95 text-white font-semibold text-sm border border-white/[0.14] transition cursor-pointer shadow-md"
+          >
+            <ShieldCheck size={16} className="stroke-[2]" />
+            <span>Open Command Center</span>
+            <ArrowRight size={14} className="stroke-[2]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={scrollToSetup}
+            className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] active:scale-95 text-white/70 hover:text-white border border-white/[0.08] font-medium text-sm transition cursor-pointer"
+          >
+            <Terminal size={15} className="stroke-[1.8] text-white/50" />
+            <span>Quick Setup Guide</span>
+          </button>
+        </div>
+
+        {/* Release Metadata Pill */}
+        <div className="flex items-center gap-2 text-xs text-white/40 font-mono pt-1">
+          <span>v0.1.0-alpha</span>
+          <span>·</span>
+          <span>Windows 10/11 x64 (2.88 MiB)</span>
+          <span>·</span>
+          <a
+            href="https://github.com/annu203099/astram-build/releases/tag/v0.1.0"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/60 hover:text-white underline underline-offset-2 flex items-center gap-1 transition"
+          >
+            <span>GitHub Release</span>
+            <ExternalLink size={10} />
+          </a>
+        </div>
       </motion.div>
 
       {/* 4 Metric Cards */}
