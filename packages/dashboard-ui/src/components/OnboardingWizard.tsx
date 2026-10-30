@@ -9,6 +9,17 @@
  */
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
+import {
+  Terminal,
+  Sparkles,
+  MousePointer,
+  Cpu,
+  PenLine,
+  Zap,
+  X,
+  ShieldCheck,
+  Check,
+} from 'lucide-react';
 import { api } from '../lib/api';
 import {
   applyProtectionUI,
@@ -25,14 +36,32 @@ export interface OnboardingWizardProps {
 
 type WizardStep = 'detect' | 'scope' | 'engine' | 'apply';
 
-const AGENT_ICONS: Record<string, string> = {
-  antigravity: 'AG',
-  'claude-code': 'CC',
-  cursor: 'CR',
-  codex: 'CX',
-  quill: 'QL',
-  dsh: 'DS',
-};
+function AgentHostIcon({
+  host,
+  size = 14,
+  className = '',
+}: {
+  host: string;
+  size?: number;
+  className?: string;
+}): JSX.Element {
+  switch (host) {
+    case 'antigravity':
+      return <Terminal size={size} className={className} />;
+    case 'claude-code':
+      return <Sparkles size={size} className={className} />;
+    case 'cursor':
+      return <MousePointer size={size} className={className} />;
+    case 'codex':
+      return <Cpu size={size} className={className} />;
+    case 'quill':
+      return <PenLine size={size} className={className} />;
+    case 'dsh':
+      return <Zap size={size} className={className} />;
+    default:
+      return <Terminal size={size} className={className} />;
+  }
+}
 
 export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps): JSX.Element {
   const [step, setStep] = useState<WizardStep>('detect');
@@ -299,8 +328,8 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex min-w-0 items-center gap-2.5">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 font-mono text-sm text-sky-300">
-                              {AGENT_ICONS[agent.agentHost] || '•'}
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.08] text-white">
+                              <AgentHostIcon host={agent.agentHost} />
                             </span>
                             <div>
                               <div className="font-medium text-zinc-100">{agent.name}</div>
@@ -389,8 +418,8 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                             onChange={() => handleToggleAgent(agent.agentHost)}
                             className="h-4 w-4 rounded border-zinc-700 bg-zinc-800 text-sky-500 focus:ring-0"
                           />
-                          <span className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 font-mono text-xs text-sky-300">
-                            {AGENT_ICONS[agent.agentHost]}
+                          <span className="flex h-6 w-6 items-center justify-center rounded bg-white/[0.08] text-white">
+                            <AgentHostIcon host={agent.agentHost} size={12} />
                           </span>
                           <span className="font-medium text-zinc-100">{agent.name}</span>
                         </label>
@@ -482,9 +511,9 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                         <button
                           type="button"
                           onClick={() => handleRemoveProjectRoot(root)}
-                          className="ml-2 text-zinc-500 hover:text-red-400"
+                          className="ml-2 text-white/40 hover:text-[#FF453A] p-0.5 rounded transition-colors"
                         >
-                          ✕
+                          <X size={12} />
                         </button>
                       </div>
                     ))}
@@ -663,7 +692,7 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                   <button
                     type="button"
                     onClick={onComplete}
-                    className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 py-2.5 font-semibold text-zinc-950 hover:from-sky-400 hover:to-emerald-400 transition"
+                    className="w-full rounded-2xl bg-white py-3 font-semibold text-black hover:bg-white/90 active:scale-[0.99] transition cursor-pointer shadow-lg"
                   >
                     Open Astram Command Center Dashboard
                   </button>

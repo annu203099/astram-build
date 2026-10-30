@@ -3,7 +3,7 @@
  *
  * Rules:
  * - 100% Monochrome foundation (True OLED Black, Slate/Zinc Glass Surfaces).
- * - Indicative semantic colors ONLY (Apple Green #30D158, Apple Orange #FF9F0A, Apple Red #FF453A, Focus White).
+ * - Indicative semantic colors ONLY (Apple Green #30D158, Apple Orange #FF9F0A, Apple Red #FF453A, Focus White #FFFFFF).
  * - Zero decorative gradients. Zero emojis.
  * - Calibrated physics-based spring curves.
  */
@@ -11,7 +11,34 @@
 import type { Transition } from 'framer-motion';
 
 // ============================================================================
-// 1. Spring Physics Presets
+// 1. Apple Palette & Colors
+// ============================================================================
+
+export const APPLE_COLORS = {
+  base: '#000000',
+  surface1: '#121214',
+  surface2: '#161618',
+  surface3: '#1C1C1E',
+  green: '#30D158',
+  orange: '#FF9F0A',
+  red: '#FF453A',
+  focus: '#FFFFFF',
+  blue: '#0A84FF',
+  zinc: {
+    950: '#09090b',
+    900: '#18181b',
+    800: '#27272a',
+    700: '#3f3f46',
+    600: '#52525b',
+    400: '#a1a1aa',
+    200: '#e4e4e7',
+  },
+} as const;
+
+export const appleColors = APPLE_COLORS;
+
+// ============================================================================
+// 2. Spring Physics Presets
 // ============================================================================
 
 export const appleSpring = {
@@ -49,7 +76,7 @@ export const appleSpring = {
 };
 
 // ============================================================================
-// 2. Indicative Semantic Color System
+// 3. Indicative Semantic Color System
 // ============================================================================
 
 export type RiskVerdict = 'PASS' | 'WARN' | 'HOLD' | 'REMEDIATED' | 'UNKNOWN';
@@ -98,6 +125,8 @@ export const RISK_THEME: Record<string, SemanticStyle> = {
   },
 };
 
+export const SEMANTIC_STATUS = RISK_THEME;
+
 export function getRiskTheme(verdict: string): SemanticStyle {
   return (
     RISK_THEME[verdict] ?? {
@@ -112,7 +141,7 @@ export function getRiskTheme(verdict: string): SemanticStyle {
 }
 
 // ============================================================================
-// 3. Apple Monochrome Surfaces
+// 4. Apple Monochrome Surfaces
 // ============================================================================
 
 export const surfaceTokens = {
@@ -126,3 +155,13 @@ export const surfaceTokens = {
   bodyText: 'text-white/75',
   headlineText: 'text-white',
 };
+
+export const SURFACES = {
+  s0: 'bg-[#000000]',
+  s1: 'bg-[#121214] border border-white/[0.08]',
+  s2: 'bg-[#161618] border border-white/[0.12] backdrop-blur-2xl',
+  s3: 'bg-[#1C1C1E] border border-white/[0.16]',
+  pill: 'rounded-full border border-white/[0.08] bg-white/[0.04]',
+};
+
+export const appleSurfaces = SURFACES;
