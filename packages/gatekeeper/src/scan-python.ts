@@ -14,6 +14,8 @@
  * DYNAMIC_EVAL categories the Handbook TEST-01 assertion requires
  * (categories ⊇ {STARTUP_HOOK, CRED_ACCESS, NET_EGRESS}).
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { RiskLevel, type AstCapabilityFact, type CapabilityCategory } from '@astram/types';
 
 interface PyRule {
@@ -126,3 +128,39 @@ export function scanPythonPth(content: string, file: string): AstCapabilityFact[
 
   return facts;
 }
+
+/** Recursively scans a directory for .pth files and evaluates their contents. */
+export function scanDirectoryForPth(dirPath: string, maxDepth: number = 3): AstCapabilityFact[] {
+  const facts: AstCapabilityFact[] = [];
+  if (!fs.existsSync(dirPath)) return facts;
+
+  const IGNORED_DIRS = new Set(['node_modules', '.git', 'testbed-attacks', 'fixtures', '.gemini', '.agents', 'dist']);
+
+  function walk(current: string, depth: number) {
+    if (depth > maxDepth) return;
+    try {
+      const entries = fs.readdirSync(current, { withFileTypes: true });
+      for (const ent of entries) {
+        const full = path.join(current, ent.name);
+        if (ent.isDirectory()) {
+          if (!IGNORED_DIRS.has(ent.name.toLowerCase())) {
+            walk(full, depth + 1);
+          }
+        } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.pth')) {
+          try {
+            const content = fs.readFileSync(full, 'utf8');
+            facts.push(...scanPythonPth(content, full));
+          } catch {
+            // ignore unreadable files
+          }
+        }
+      }
+    } catch {
+      // ignore directory read errors
+    }
+  }
+
+  walk(dirPath, 0);
+  return facts;
+}
+

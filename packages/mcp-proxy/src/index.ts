@@ -5,7 +5,7 @@
  * wrapMcpServerEntry (+ McpServerEntry), protectWorkspace (+ ProtectReport).
  * CLI bins live in cli-proxy.ts / cli-astram.ts (package.json#bin).
  */
-export { StdioFirewall, POLICY_CHARTER_ID } from './firewall.js';
+export { StdioFirewall, POLICY_CHARTER_ID, extractDownloadedFiles, scanDownloadThenExec } from './firewall.js';
 export {
   scanPackageInstall,
   normalizePackageName,

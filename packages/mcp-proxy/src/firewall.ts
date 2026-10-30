@@ -11,6 +11,8 @@
  * - `handleServerMessage` — compacts (redact / strip ANSI / 32 KB cap) server
  *   results before they reach the agent.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   isProtectedPath,
@@ -24,9 +26,20 @@ import {
   type PolicyVerdict,
 } from '@astram/types';
 import type { JevDecisionClient } from '@astram/gatekeeper';
-import { scanJavascript, scanPythonCode, scanShellSnippet } from '@astram/gatekeeper';
+import {
+  scanJavascript,
+  scanPythonCode,
+  scanShellSnippet,
+  scanPythonPth,
+  scanDirectoryForPth,
+  analyzeBytePathJs,
+  analyzeBytePathPython,
+  analyzeBytePathRuby,
+  analyzeBytePathPhp,
+  taintFactsFromSinks,
+} from '@astram/gatekeeper';
 import type { LedgerDb } from '@astram/db';
-import { scanDangerousCommand } from './dangerous-commands.js';
+import { deobfuscate, scanDangerousCommand } from './dangerous-commands.js';
 import { scanPackageInstall } from './package-install.js';
 import { INJECTION_NOTICE, detectInjection } from './injection.js';
 import { compactMcpResult, redactSecrets, stripAnsi, truncateUtf8Safe } from './redact.js';
@@ -45,6 +58,129 @@ export const POLICY_CHARTER_ID = 'astram-policy-charter-v1';
 /** Tool arguments are tagged with this pseudo-file in every fact. */
 const ARGS_FILE = '<args>';
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Extracts destination filenames from download commands (curl, wget, PowerShell, certutil).
+ */
+export function extractDownloadedFiles(text: string): string[] {
+  const downloaded: string[] = [];
+  const lines = text.split('\n');
+  for (const rawLine of lines) {
+    if (!rawLine || rawLine.length > 20000) continue;
+    const line = deobfuscate(rawLine);
+
+    // 1. curl -o / --output / -O / --remote-name
+    if (/\bcurl(?:\.exe)?\b/i.test(line)) {
+      const oMatch = line.match(/(?:-o\s+|--output\s*=?\s*)(["']?)([^\s"'`;&|]+)\1/);
+      if (oMatch && oMatch[2] && oMatch[2] !== '-') {
+        downloaded.push(oMatch[2]);
+      } else if (/(?:-O\b|--remote-name\b)/.test(line)) {
+        const urlMatch = line.match(/https?:\/\/[^\s"'`;&|]+/i);
+        if (urlMatch) {
+          const base = urlMatch[0].split('/').pop()?.split(/[?#]/)[0];
+          if (base && base !== '.' && base !== '/') downloaded.push(base);
+        }
+      }
+    }
+
+    // 2. wget -O / --output-document / bare url
+    if (/\bwget(?:\.exe)?\b/i.test(line)) {
+      const oMatch = line.match(/(?:-O\s*|--output-document\s*=?\s*)(["']?)([^\s"'`;&|]+)\1/);
+      if (oMatch && oMatch[2] && oMatch[2] !== '-') {
+        downloaded.push(oMatch[2]);
+      } else {
+        const urlMatch = line.match(/https?:\/\/[^\s"'`;&|]+/i);
+        if (urlMatch) {
+          const base = urlMatch[0].split('/').pop()?.split(/[?#]/)[0];
+          if (base && base !== '.' && base !== '/') downloaded.push(base);
+        }
+      }
+    }
+
+    // 3. PowerShell Invoke-WebRequest / iwr / Start-BitsTransfer
+    const psMatch = line.match(/\b(?:Invoke-WebRequest|iwr)\b[^\n]*-OutFile\s+(["']?)([^\s"'`;&|]+)\1/i);
+    if (psMatch && psMatch[2]) downloaded.push(psMatch[2]);
+
+    const bitsMatch = line.match(/\bStart-BitsTransfer\b[^\n]*-Destination\s+(["']?)([^\s"'`;&|]+)\1/i);
+    if (bitsMatch && bitsMatch[2]) downloaded.push(bitsMatch[2]);
+
+    // 4. certutil
+    if (/\bcertutil(?:\.exe)?\b[^\n]*-urlcache\b/i.test(line)) {
+      const parts = line.trim().split(/\s+/);
+      const last = parts[parts.length - 1];
+      if (last && !last.startsWith('-') && !last.startsWith('http')) {
+        downloaded.push(last.replace(/^["']|["']$/g, ''));
+      }
+    }
+  }
+
+  return Array.from(new Set(downloaded.map((f) => f.replace(/^["']|["']$/g, '').replace(/\\/g, '/')).filter(Boolean)));
+}
+
+const INTERPRETERS = String.raw`(?:bash|sh|zsh|dash|ash|ksh|csh|tcsh|powershell(?:\.exe)?|pwsh(?:\.exe)?|cmd(?:\.exe)?|python[23]?(?:\.exe)?|py(?:\.exe)?|node(?:\.exe)?|nodejs|perl|ruby|php|source)`;
+
+/**
+ * Checks whether a command string attempts to execute any file in targets.
+ */
+export function scanDownloadThenExec(
+  text: string,
+  targets: Set<string>,
+  file: string
+): AstCapabilityFact[] {
+  if (targets.size === 0 || !text || text.length > 20000) return [];
+  const facts: AstCapabilityFact[] = [];
+  const lines = text.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (!rawLine) continue;
+    const line = deobfuscate(rawLine);
+    const lineNo = i + 1;
+    const lowerLine = line.toLowerCase();
+
+    for (const target of targets) {
+      if (!lowerLine.includes(target.toLowerCase())) continue;
+
+      const escaped = escapeRegExp(target);
+
+      // (1) Interpreter execution: interpreter at command position followed by optional flags and target file
+      const interpRegex = new RegExp(
+        `(?:^|[;&|(\\x60]\\s*)\\s*${INTERPRETERS}\\b(?:\\s+-[a-zA-Z0-9_-]+)*\\s+["']?(?:[^\\s"'\\x60;&|]*[\\\\/])?${escaped}["']?(?=$|[\\s;&|])`,
+        'i'
+      );
+
+      // (2) Direct execution: command position with ./, .\, /, or drive path
+      const directRegex = new RegExp(
+        `(?:^|[;&|(\\x60]\\s*)\\s*["']?(?:\\.\\/|\\.\\\\|[a-zA-Z]:[\\\\/]|/)(?:[^\\s"'\\x60;&|]*[\\\\/])?${escaped}["']?(?=$|[\\s;&|])`,
+        'i'
+      );
+
+      // (3) Exec/eval/start/call/source
+      const utilRegex = new RegExp(
+        `(?:^|[;&|(\\x60]\\s*)\\s*(?:exec|eval|start|call|source)\\s+["']?(?:[^\\s"'\\x60;&|]*[\\\\/])?${escaped}["']?(?=$|[\\s;&|])`,
+        'i'
+      );
+
+      if (interpRegex.test(line) || directRegex.test(line) || utilRegex.test(line)) {
+        facts.push({
+          ruleId: 'ARG_DOWNLOAD_THEN_EXEC',
+          category: 'PROC_EXEC',
+          file,
+          line: lineNo,
+          snippet: rawLine.trim().slice(0, 200),
+          deterministicRisk: RiskLevel.HOLD,
+        });
+        break;
+      }
+    }
+  }
+
+  return facts;
+}
+
 /**
  * Tokenizer for denylist checks: splits on whitespace, quotes and the shell
  * separators `;`, `&`, `|` (covers `;`, `&&`, `||`), then trims dangling
@@ -62,6 +198,9 @@ const SHELL_LOOKING = /\b(curl|wget|powershell|cmd|iex)\b|\.exe\b|invoke-/i;
 
 /** Code-looking argument values also go through scanJavascript/scanPythonCode. */
 const CODE_LOOKING = /function|=>|\bimport\s|\brequire\s*\(|^\s*def\s/m;
+
+const TAINT_OR_CODE_LOOKING =
+  /function|=>|\bimport\s|\brequire\s*\(|^\s*def\s|\bzlib\b|\bcreateBrotliDecompress\b|\bbrotliDecompress|\bRegexp\.(?:new|compile|union)\b|\bos\.(?:environ|getenv)\b|\bopen\s*\([^)]*\.env|\burllib|\brequests\b|\bhttpx\b|\bsession\.(?:upload_progress|serialize_handler)\b/m;
 
 /** Recursively collects every string value in a JSON-ish structure. */
 function collectStrings(value: unknown, out: string[], seen: Set<unknown>): void {
@@ -112,8 +251,14 @@ export class StdioFirewall {
   private prevTxId: string | null = null;
   /** Optional sink for every recorded tx (CLI telemetry uses this). */
   onTx: ((tx: AtomicAuditTx) => void) | null = null;
-  /** Optional sink for non-blocking WARN alerts (e.g. injection-like tool output). */
-  onAlert: ((alert: { level: 'WARN'; message: string; target?: string }) => void) | null = null;
+  /** Optional sink for non-blocking WARN alerts (e.g. injection-like tool output) or post-install alerts. */
+  onAlert: ((alert: { level: 'WARN' | 'HOLD'; message: string; target?: string }) => void) | null = null;
+
+  /** Session-scoped tracking of downloaded files (R4: multi-command chain detection). */
+  private readonly downloadedFiles = new Set<string>();
+
+  /** Tracks pending package install commands to trigger post-install .pth scanning. */
+  private pendingInstall = false;
 
   private readonly opts: FirewallOptions;
 
@@ -135,11 +280,14 @@ export class StdioFirewall {
 
   /**
    * Core policy check on a tools/call — pure, spawn-free.
-   * Deterministic facts come from (a) denylist tokenization of every string
-   * value (and the tool name), (b) scanShellSnippet on shell-looking values,
-   * (c) scanJavascript + scanPythonCode on code-looking values. finalRisk =
-   * maxDeterministicRisk, optionally adjusted by the Jev Decision API
-   * (Invariant I1: a HOLD can never be lowered).
+   * Deterministic facts come from:
+   * (a) denylist tokenization of every string value (and the tool name),
+   * (b) dangerous shell commands and package install commands,
+   * (c) multi-command download-then-exec chain detection,
+   * (d) scanShellSnippet on shell-looking values,
+   * (e) scanJavascript + scanPythonCode on code-looking values,
+   * (f) live bytepath taint tracking (JS Brotli, Python cred exfil, Ruby regex, PHP session),
+   * (g) file argument and on-disk file inspection.
    */
   async inspectToolCall(
     toolName: string,
@@ -160,10 +308,27 @@ export class StdioFirewall {
     // Every string value in the arguments, recursively.
     const strings: string[] = [];
     collectStrings(args ?? {}, strings, new Set());
+
+    // Extract newly downloaded files in this tool call
+    const newDownloads: string[] = [];
+    for (const value of strings) {
+      for (const dl of extractDownloadedFiles(value)) {
+        newDownloads.push(dl);
+        newDownloads.push(path.posix.basename(dl));
+        newDownloads.push(dl.replace(/^\.\//, ''));
+      }
+    }
+
+    const activeTargets = new Set<string>([
+      ...this.downloadedFiles,
+      ...newDownloads.map((s) => s.toLowerCase()),
+    ]);
+
     for (const value of strings) {
       this.inspectDenylist(value, push);
       for (const fact of scanDangerousCommand(value, ARGS_FILE)) push(fact);
-      for (const fact of scanPackageInstall(value, ARGS_FILE)) push(fact);
+      for (const fact of scanPackageInstall(value, ARGS_FILE, { unpinnedRisk: RiskLevel.WARN })) push(fact);
+      for (const fact of scanDownloadThenExec(value, activeTargets, ARGS_FILE)) push(fact);
       if (SHELL_LOOKING.test(value)) {
         for (const fact of scanShellSnippet(value, ARGS_FILE)) push(fact);
       }
@@ -171,7 +336,16 @@ export class StdioFirewall {
         for (const fact of scanJavascript(value, ARGS_FILE)) push(fact);
         for (const fact of scanPythonCode(value, ARGS_FILE)) push(fact);
       }
+      if (TAINT_OR_CODE_LOOKING.test(value)) {
+        for (const fact of taintFactsFromSinks(analyzeBytePathJs(value, ARGS_FILE), ARGS_FILE)) push(fact);
+        for (const fact of taintFactsFromSinks(analyzeBytePathPython(value, ARGS_FILE), ARGS_FILE)) push(fact);
+        for (const fact of taintFactsFromSinks(analyzeBytePathRuby(value, ARGS_FILE), ARGS_FILE)) push(fact);
+        for (const fact of taintFactsFromSinks(analyzeBytePathPhp(value, ARGS_FILE), ARGS_FILE)) push(fact);
+      }
     }
+
+    // Inspect files referenced on disk or written by tool call
+    this.inspectFileArguments(toolName, args, strings, push);
 
     const deterministicRisk = maxDeterministicRisk(facts);
     let finalRisk = deterministicRisk;
@@ -185,6 +359,13 @@ export class StdioFirewall {
       reasoning = res.reasoning;
     }
 
+    // If not blocked, commit newly downloaded files to session tracking
+    if (finalRisk !== RiskLevel.HOLD) {
+      for (const dl of newDownloads) {
+        this.downloadedFiles.add(dl.toLowerCase());
+      }
+    }
+
     return {
       target: toolName,
       category: 'MCP_SERVER',
@@ -196,6 +377,77 @@ export class StdioFirewall {
       facts,
       disposition: finalRisk === RiskLevel.HOLD ? 'BLOCKED_PRE_EXEC' : 'COMMITTED',
     };
+  }
+
+  /** Inspects file paths on disk or file-writing arguments for .pth startup hooks and bytepath taint sinks. */
+  private inspectFileArguments(
+    toolName: string,
+    args: Record<string, unknown>,
+    strings: string[],
+    push: (fact: AstCapabilityFact) => void
+  ): void {
+    const targetFile = typeof args.path === 'string'
+      ? args.path
+      : typeof args.filePath === 'string'
+        ? args.filePath
+        : typeof args.TargetFile === 'string'
+          ? args.TargetFile
+          : typeof args.file === 'string'
+            ? args.file
+            : '';
+
+    const content = typeof args.content === 'string'
+      ? args.content
+      : typeof args.CodeContent === 'string'
+        ? args.CodeContent
+        : typeof args.text === 'string'
+          ? args.text
+          : '';
+
+    if (targetFile && targetFile.toLowerCase().endsWith('.pth') && content) {
+      for (const fact of scanPythonPth(content, targetFile)) {
+        push(fact);
+      }
+    }
+
+    const fileCandidates = new Set<string>();
+    if (targetFile) fileCandidates.add(targetFile);
+
+    for (const str of strings) {
+      if (str.length < 300 && (str.endsWith('.js') || str.endsWith('.ts') || str.endsWith('.py') || str.endsWith('.pth') || str.endsWith('.rb') || str.endsWith('.php'))) {
+        fileCandidates.add(str.trim().replace(/^['"]|['"]$/g, ''));
+      }
+    }
+
+    for (const f of fileCandidates) {
+      try {
+        const resolved = path.isAbsolute(f) ? f : path.resolve(process.cwd(), f);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+          const size = fs.statSync(resolved).size;
+          if (size <= 1024 * 1024) {
+            const fileCode = fs.readFileSync(resolved, 'utf8');
+            const lowerF = resolved.toLowerCase();
+            if (lowerF.endsWith('.pth')) {
+              for (const fact of scanPythonPth(fileCode, resolved)) push(fact);
+            }
+            if (lowerF.endsWith('.js') || lowerF.endsWith('.ts')) {
+              for (const fact of taintFactsFromSinks(analyzeBytePathJs(fileCode, resolved), resolved)) push(fact);
+            }
+            if (lowerF.endsWith('.py')) {
+              for (const fact of taintFactsFromSinks(analyzeBytePathPython(fileCode, resolved), resolved)) push(fact);
+            }
+            if (lowerF.endsWith('.rb')) {
+              for (const fact of taintFactsFromSinks(analyzeBytePathRuby(fileCode, resolved), resolved)) push(fact);
+            }
+            if (lowerF.endsWith('.php')) {
+              for (const fact of taintFactsFromSinks(analyzeBytePathPhp(fileCode, resolved), resolved)) push(fact);
+            }
+          }
+        }
+      } catch {
+        // ignore disk read errors
+      }
+    }
   }
 
   /** (a) tokenizer + isProtectedPath on one string; any hit is a HOLD fact. */
@@ -232,6 +484,12 @@ export class StdioFirewall {
     const args = isJsonObject(params.arguments) ? params.arguments : {};
 
     const verdict = await this.inspectToolCall(params.name, args);
+    if (verdict.finalRisk !== RiskLevel.HOLD) {
+      const cmdStr = JSON.stringify(args);
+      if (/\bpip(?:\.exe)?\s+install\b|\b(?:npm|pnpm|yarn)\s+(?:install|add|i)\b/i.test(cmdStr)) {
+        this.pendingInstall = true;
+      }
+    }
     const ts = Date.now();
     const meta = isJsonObject(params._meta) ? params._meta : {};
     const tx: AtomicAuditTx = {
@@ -293,6 +551,28 @@ export class StdioFirewall {
    * wrapped in a valid `{ 'astram:truncated-result': string }` envelope.
    */
   async handleServerMessage(rawMsg: unknown): Promise<unknown> {
+    if (this.pendingInstall) {
+      this.pendingInstall = false;
+      try {
+        const pthFacts = scanDirectoryForPth(process.cwd());
+        const holdFacts = pthFacts.filter((f) => f.deterministicRisk === RiskLevel.HOLD);
+        if (holdFacts.length > 0 && this.onAlert) {
+          this.onAlert({
+            level: 'HOLD',
+            message: `astram: Malicious .pth startup hook detected post-install (${holdFacts.map((f) => f.ruleId).join(', ')})`,
+            target: this.opts.serverId,
+          });
+        } else if (this.onAlert) {
+          this.onAlert({
+            level: 'WARN',
+            message: `astram: Completed post-install hook scan (${pthFacts.length} .pth files inspected)`,
+            target: this.opts.serverId,
+          });
+        }
+      } catch {
+        // ignore errors during post-install sweep
+      }
+    }
     const msg = this.flagInjection(rawMsg);
     const input = JSON.stringify(msg ?? null);
     const { output } = compactMcpResult(msg, this.maxResultBytes);

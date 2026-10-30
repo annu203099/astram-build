@@ -10,8 +10,11 @@
  *   category: 'DEP_SUPPLY_CHAIN'
  *   deterministicRisk: RiskLevel.HOLD
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { coerce, intersects, satisfies, validRange } from 'semver';
 import { KNOWN_BAD_PACKAGES, RiskLevel, type AstCapabilityFact } from '@astram/types';
+import { scanLockfile } from './lockfile.js';
 
 /**
  * Normalizes Python package name per PEP 503:
@@ -117,6 +120,7 @@ export interface ParsedPackageSpec {
 export interface ParsedPackageCommand {
   manager: PackageManagerKind;
   packages: ParsedPackageSpec[];
+  requirementsFiles?: string[];
 }
 
 /** Python install command pattern */
@@ -242,6 +246,7 @@ function extractFromSegment(segment: string): ParsedPackageCommand | null {
 
   const tokens = tokenizeSegment(segment);
   const packages: ParsedPackageSpec[] = [];
+  const requirementsFiles: string[] = [];
 
   // Find install keyword position
   let installIdx = -1;
@@ -274,6 +279,11 @@ function extractFromSegment(segment: string): ParsedPackageCommand | null {
       const flagName = hasEqual ? lower.split('=')[0] : lower;
 
       if (manager === 'pip') {
+        if (flagName === '-r' || flagName === '--requirement') {
+          const reqFile = hasEqual ? tok.slice(tok.indexOf('=') + 1) : tokens[++i];
+          if (reqFile) requirementsFiles.push(reqFile.replace(/^['"]|['"]$/g, ''));
+          continue;
+        }
         if (!hasEqual && PYTHON_FLAGS_WITH_ARG.has(flagName)) {
           i++; // Skip argument
         }
@@ -315,7 +325,7 @@ function extractFromSegment(segment: string): ParsedPackageCommand | null {
     }
   }
 
-  return { manager, packages };
+  return { manager, packages, requirementsFiles };
 }
 
 /**
@@ -330,7 +340,7 @@ export function extractPackageCommands(commandLine: string): ParsedPackageComman
     const segments = splitCommandChains(line);
     for (const segment of segments) {
       const parsed = extractFromSegment(segment);
-      if (parsed && parsed.packages.length > 0) {
+      if (parsed && (parsed.packages.length > 0 || (parsed.requirementsFiles && parsed.requirementsFiles.length > 0))) {
         results.push(parsed);
       }
     }
@@ -363,20 +373,55 @@ export function scanPackageInstallCommand(
       const cmd = extractFromSegment(segment);
       if (!cmd) continue;
 
+      if (cmd.requirementsFiles && cmd.requirementsFiles.length > 0) {
+        for (const reqPath of cmd.requirementsFiles) {
+          try {
+            const resolved = path.isAbsolute(reqPath) ? reqPath : path.resolve(process.cwd(), reqPath);
+            if (fs.existsSync(resolved)) {
+              const content = fs.readFileSync(resolved, 'utf8');
+              const lockFacts = scanLockfile(content, 'pip', resolved);
+              facts.push(...lockFacts);
+            }
+          } catch {
+            // graceful ignore on disk read error
+          }
+        }
+      }
+
       for (const spec of cmd.packages) {
         for (const bad of KNOWN_BAD_PACKAGES) {
           if (!packageNamesMatch(spec.name, bad.name)) continue;
 
-          if (evaluateVersionMatch(spec.version, bad.versionRange)) {
-            const displayVersion = spec.version ? spec.version : 'unpinned';
-            const snippet = `Blocked ${cmd.manager} install of malicious package ${spec.name}@${displayVersion} (${bad.advisoryId}: ${bad.name} ${bad.versionRange})`.slice(0, 200);
+          const effectiveRange = bad.vulnerableVersion ?? bad.versionRange;
+          const isUnpinned = !spec.version || spec.version === '' || spec.version === 'unpinned' || spec.version === '*';
 
+          if (isUnpinned) {
+            if (bad.versionRange === '*') {
+              facts.push({
+                ruleId: 'PACKAGE_INSTALL_KNOWN_BAD',
+                category: 'DEP_SUPPLY_CHAIN',
+                file,
+                line: lineNo,
+                snippet: `Blocked ${cmd.manager} install of malicious package ${spec.name}@unpinned (${bad.advisoryId}: ${bad.name} ${bad.versionRange})`.slice(0, 200),
+                deterministicRisk: RiskLevel.HOLD,
+              });
+            } else {
+              facts.push({
+                ruleId: 'PACKAGE_INSTALL_UNPINNED',
+                category: 'DEP_SUPPLY_CHAIN',
+                file,
+                line: lineNo,
+                snippet: `Warning: unpinned install of ${spec.name} with known vulnerable version ${effectiveRange} (${bad.advisoryId})`.slice(0, 200),
+                deterministicRisk: RiskLevel.WARN,
+              });
+            }
+          } else if (evaluateVersionMatch(spec.version, effectiveRange)) {
             facts.push({
               ruleId: 'PACKAGE_INSTALL_KNOWN_BAD',
               category: 'DEP_SUPPLY_CHAIN',
               file,
               line: lineNo,
-              snippet,
+              snippet: `Blocked ${cmd.manager} install of malicious package ${spec.name}@${spec.version} (${bad.advisoryId}: ${bad.name} ${effectiveRange})`.slice(0, 200),
               deterministicRisk: RiskLevel.HOLD,
             });
           }

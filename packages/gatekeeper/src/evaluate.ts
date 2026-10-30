@@ -1,8 +1,5 @@
-/**
- * @astram/gatekeeper — one-shot evaluation convenience used by the proxy,
- * server and testbed. Computes the deterministic max, optionally consults the
- * Jev Decision API, and returns a PolicyVerdict.
- */
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   maxDeterministicRisk,
   RiskLevel,
@@ -11,16 +8,26 @@ import {
   type PolicyVerdict,
 } from '@astram/types';
 import type { JevDecisionClient } from './jev-decision-client.js';
+import {
+  analyzeBytePathJs,
+  analyzeBytePathPython,
+  analyzeBytePathRuby,
+  analyzeBytePathPhp,
+  taintFactsFromSinks,
+  type TaintSink,
+} from './bytepath-taint.js';
 
 export interface EvaluateArtifactInput {
   artifactName: string;
   statedPurpose?: string;
   category: BoardingCategory;
   facts: AstCapabilityFact[];
+  code?: string;
+  filePath?: string;
   jev?: JevDecisionClient;
 }
 
-/** Up to 3 ruleIds, highest deterministic risk first, first-seen tiebreak. */
+/** Uply to 3 ruleIds, highest deterministic risk first, first-seen tiebreak. */
 function evidenceSummaryOf(facts: AstCapabilityFact[]): string {
   const order: string[] = [];
   const risk = new Map<string, RiskLevel>();
@@ -40,7 +47,42 @@ function evidenceSummaryOf(facts: AstCapabilityFact[]): string {
 }
 
 export async function evaluateArtifact(input: EvaluateArtifactInput): Promise<PolicyVerdict> {
-  const deterministicRisk = maxDeterministicRisk(input.facts);
+  const allFacts = [...(input.facts ?? [])];
+
+  let code = input.code;
+  if (!code && input.filePath) {
+    try {
+      if (fs.existsSync(input.filePath)) {
+        code = fs.readFileSync(input.filePath, 'utf8');
+      }
+    } catch {
+      // non-fatal disk read
+    }
+  }
+
+  if (code) {
+    const sinks: TaintSink[] = [];
+    const ext = path.extname(input.artifactName || input.filePath || '').toLowerCase();
+
+    if (!ext || ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx' || ext === '.mjs' || ext === '.cjs') {
+      sinks.push(...analyzeBytePathJs(code, input.artifactName));
+    }
+    if (!ext || ext === '.py' || ext === '.pth') {
+      sinks.push(...analyzeBytePathPython(code, input.artifactName));
+    }
+    if (!ext || ext === '.rb') {
+      sinks.push(...analyzeBytePathRuby(code, input.artifactName));
+    }
+    if (!ext || ext === '.php') {
+      sinks.push(...analyzeBytePathPhp(code, input.artifactName));
+    }
+
+    if (sinks.length > 0) {
+      allFacts.push(...taintFactsFromSinks(sinks, input.artifactName));
+    }
+  }
+
+  const deterministicRisk = maxDeterministicRisk(allFacts);
   let finalRisk = deterministicRisk;
   let apiDelta = 0;
   let reasoning = 'Deterministic AST baseline verdict (no Decision API configured).';
@@ -48,7 +90,7 @@ export async function evaluateArtifact(input: EvaluateArtifactInput): Promise<Po
     const res = await input.jev.evaluateAstFacts(
       input.artifactName,
       input.statedPurpose ?? '',
-      input.facts
+      allFacts
     );
     finalRisk = res.finalRisk;
     apiDelta = res.apiDelta;
@@ -61,8 +103,8 @@ export async function evaluateArtifact(input: EvaluateArtifactInput): Promise<Po
     apiDelta,
     finalRisk,
     reasoning,
-    evidenceSummary: evidenceSummaryOf(input.facts),
-    facts: input.facts,
+    evidenceSummary: evidenceSummaryOf(allFacts),
+    facts: allFacts,
     disposition: finalRisk === RiskLevel.HOLD ? 'BLOCKED_PRE_EXEC' : 'COMMITTED',
   };
 }

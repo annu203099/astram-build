@@ -240,6 +240,7 @@ export function isProtectedPath(pathLike: string): ProtectedPathMatch {
 export interface KnownBadPackage {
   name: string;
   versionRange: string; // semver range understood by the gatekeeper's comparator
+  vulnerableVersion?: string; // specific isolated version when only a single release is vulnerable
   reason: string;
   risk: RiskLevel;
   advisoryId: string;
@@ -249,6 +250,7 @@ export const KNOWN_BAD_PACKAGES: readonly KnownBadPackage[] = [
   {
     name: 'litellm',
     versionRange: '<=1.107.0',
+    vulnerableVersion: '1.107.0',
     reason: 'Installs evil .pth startup hook exfiltrating credentials on interpreter startup (Black October)',
     risk: RiskLevel.HOLD,
     advisoryId: 'AEGIS-BB-LITELLM-1.107.0',

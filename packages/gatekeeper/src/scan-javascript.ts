@@ -83,11 +83,130 @@ function visit(node: unknown, cb: (n: AnyNode) => void): void {
   }
 }
 
-export function scanJavascript(code: string, file: string): AstCapabilityFact[] {
-  const program = parseMaybe(code);
-  if (!program) return [];
+const TS_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
+const TS_SYNTAX_PATTERNS = [
+  /:\s*(?:string|number|boolean|any|unknown|never|void|object|Record|Array|Promise|[A-Z]\w*)\b/,
+  /\b(?:interface|type)\s+[A-Za-z0-9_$]+/,
+  /\b(?:public|private|protected|readonly|declare|override)\s+\w+/,
+  /\bas\s+(?:const|string|number|any|[A-Z]\w*)/,
+  /\benum\s+\w+/,
+  /\bnamespace\s+\w+/,
+  /<[A-Za-z0-9_$]+>\s*\(/,
+];
 
+export function isTypeScript(code: string, file: string = ''): boolean {
+  if (file && typeof file === 'string' && file.includes('.')) {
+    const ext = file.slice(file.lastIndexOf('.')).toLowerCase();
+    if (TS_EXTENSIONS.has(ext)) return true;
+  }
+  return TS_SYNTAX_PATTERNS.some((p) => p.test(code));
+}
+
+/** Strips TypeScript types and annotations while preserving exact line positions. */
+export function stripTypeScriptTypes(code: string): string {
+  let s = code;
+  // 1. Remove interfaces: interface Foo { ... }
+  s = s.replace(/\binterface\s+[A-Za-z0-9_$]+(?:\s*<[^>]*>)?(?:\s+extends\s+[^{]+)?\s*\{[\s\S]*?\}/g, (m) =>
+    m.replace(/[^\r\n]/g, ' ')
+  );
+  // 2. Remove type aliases: type Foo = ...;
+  s = s.replace(/\btype\s+[A-Za-z0-9_$]+(?:\s*<[^>]*>)?\s*=[\s\S]*?;/g, (m) =>
+    m.replace(/[^\r\n]/g, ' ')
+  );
+  // 3. Remove access modifiers: public, private, protected, readonly, override, declare
+  s = s.replace(/\b(public|private|protected|readonly|override|declare)\s+/g, (m) =>
+    ' '.repeat(m.length)
+  );
+  // 4. Remove type assertions: as const, as any, as Type, as unknown as Type
+  s = s.replace(/\bas\s+([A-Za-z0-9_$]+(?:\s*<[^>]*>)?(?:\s*\[\s*\])?)/g, (m) =>
+    ' '.repeat(m.length)
+  );
+  // 5. Remove variable / parameter / return type annotations: ': Type' before =, ;, ), ,, {, =>, or newline
+  s = s.replace(/:\s*[A-Za-z0-9_$]+(?:\s*<[^>]*>)?(?:\s*\[\s*\])?(?=\s*(=|;|\)|,|\{|=>|\n|\r|$))/g, (m) =>
+    ' '.repeat(m.length)
+  );
+  return s;
+}
+
+function scanJavascriptFallback(code: string, file: string, lines: string[]): AstCapabilityFact[] {
+  const facts: AstCapabilityFact[] = [];
+  const pushFallback = (ruleId: string, category: CapabilityCategory, risk: RiskLevel, lineNo: number) => {
+    facts.push({
+      ruleId,
+      category,
+      file,
+      line: lineNo,
+      snippet: snippetFor(lines, lineNo),
+      deterministicRisk: risk,
+    });
+  };
+
+  const hasChildProcess = /\b(?:require\s*\(\s*['"](?:node:)?child_process['"]\s*\)|from\s+['"](?:node:)?child_process['"]|import\s+['"](?:node:)?child_process['"])/.test(code);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNo = i + 1;
+
+    // JS_DYNAMIC_EVAL
+    if (/\beval\s*\(|\bnew\s+Function\s*\(|\bvm\.(?:runInContext|runInNewContext|runInThisContext)\s*\(/.test(line)) {
+      pushFallback('JS_DYNAMIC_EVAL', 'DYNAMIC_EVAL', RiskLevel.WARN, lineNo);
+    }
+
+    // JS_NET_EGRESS
+    if (/\b(?:fetch|axios)\s*\(|\b(?:http|https)\.request\s*\(|\bnet\.connect\s*\(|\b(?:require|from)\s*\(?.*['"](?:axios|urllib)['"]/.test(line)) {
+      pushFallback('JS_NET_EGRESS', 'NET_EGRESS', RiskLevel.WARN, lineNo);
+    }
+
+    // JS_FS_CRED_READ
+    const fsMatch = /\b(?:readFile|readFileSync|createReadStream)\s*\(\s*[`'"]([^`'"]+)[`'"]/.exec(line);
+    if (fsMatch && fsMatch[1] && isProtectedPath(fsMatch[1]).protected) {
+      pushFallback('JS_FS_CRED_READ', 'CRED_ACCESS', RiskLevel.WARN, lineNo);
+    }
+
+    // JS_CHILD_PROCESS & JS_SHELL_CRED_READ
+    if (hasChildProcess && /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line)) {
+      pushFallback('JS_CHILD_PROCESS', 'PROC_EXEC', RiskLevel.HOLD, lineNo);
+      if (protectedPathIn(line).protected) {
+        pushFallback('JS_SHELL_CRED_READ', 'CRED_ACCESS', RiskLevel.HOLD, lineNo);
+      }
+    }
+  }
+
+  return facts;
+}
+
+export function scanJavascript(code: string, file: string): AstCapabilityFact[] {
   const lines = code.split('\n');
+  let program = parseMaybe(code);
+  let parseFailed = false;
+
+  if (!program) {
+    if (isTypeScript(code, file)) {
+      const stripped = stripTypeScriptTypes(code);
+      program = parseMaybe(stripped);
+      if (!program) {
+        parseFailed = true;
+      }
+    } else {
+      return [];
+    }
+  }
+
+  if (parseFailed) {
+    const facts: AstCapabilityFact[] = [
+      {
+        ruleId: 'TS_PARSE_WARN',
+        category: 'DYNAMIC_EVAL',
+        file,
+        line: 1,
+        snippet: snippetFor(lines, 1),
+        deterministicRisk: RiskLevel.WARN,
+      },
+    ];
+    facts.push(...scanJavascriptFallback(code, file, lines));
+    return facts;
+  }
+
   const facts: AstCapabilityFact[] = [];
   const push = (ruleId: string, category: CapabilityCategory, risk: RiskLevel, node: AnyNode): void => {
     const line = node.loc?.start.line ?? 1;

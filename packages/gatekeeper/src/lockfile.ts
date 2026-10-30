@@ -15,15 +15,37 @@
  * parsed with smol-toml; [project.dependencies] +
  * [project.optional-dependencies]). Malformed content never throws: [].
  */
-import { coerce, satisfies } from 'semver';
+import { coerce, intersects, satisfies, validRange } from 'semver';
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 import { KNOWN_BAD_PACKAGES, type AstCapabilityFact } from '@astram/types';
+import { formatRangeForSemver } from './scan-package-command.js';
 
 export type LockfileKind = 'npm' | 'pnpm' | 'pip' | 'pyproject';
 
 export function matchesVersionRange(version: string, range: string): boolean {
-  const v = coerce(version.split('(')[0].trim());
+  if (!version || version === '*' || version === 'latest' || version === 'unpinned') {
+    return true;
+  }
+  if (!range || range === '*') {
+    return true;
+  }
+  const clean = version.trim().replace(/^['"]|['"]$/g, '');
+  const pin = /^={1,2}\s*([^,;\s]+)$/.exec(clean);
+  if (pin) {
+    const v = coerce(pin[1]);
+    return !!(v && satisfies(v, range));
+  }
+  if (!/[<>=~^,]/.test(clean)) {
+    const v = coerce(clean.split('(')[0].trim());
+    return !!(v && satisfies(v, range));
+  }
+  const formatted = formatRangeForSemver(clean);
+  const vr = validRange(formatted);
+  if (vr && intersects(vr, range)) {
+    return true;
+  }
+  const v = coerce(clean);
   return !!(v && satisfies(v, range));
 }
 
@@ -47,16 +69,41 @@ function checkDeps(deps: DepRef[], file: string): AstCapabilityFact[] {
     for (const pkg of KNOWN_BAD_PACKAGES) {
       if (normalizeName(pkg.name) !== normName) continue;
 
+      const targetRange = pkg.vulnerableVersion ?? pkg.versionRange;
       let matches = false;
       let displayVer = dep.version || 'unpinned';
 
       if (!dep.version || dep.version === 'unpinned' || dep.version === '*') {
         matches = true;
       } else {
-        const v = coerce(dep.version.split('(')[0].trim());
-        if (v && satisfies(v, pkg.versionRange)) {
-          matches = true;
-          displayVer = v.version;
+        const clean = dep.version.trim();
+        const pin = /^={1,2}\s*([^,;\s]+)$/.exec(clean);
+        if (pin) {
+          const v = coerce(pin[1]);
+          if (v && satisfies(v, targetRange)) {
+            matches = true;
+            displayVer = v.version;
+          }
+        } else if (!/[<>=~^,]/.test(clean)) {
+          const v = coerce(clean.split('(')[0].trim());
+          if (v && satisfies(v, targetRange)) {
+            matches = true;
+            displayVer = v.version;
+          }
+        } else {
+          // Range check e.g. >=1.100,<1.108
+          const formatted = formatRangeForSemver(clean);
+          const vr = validRange(formatted);
+          if (vr && intersects(vr, targetRange)) {
+            matches = true;
+            displayVer = clean;
+          } else {
+            const v = coerce(clean);
+            if (v && satisfies(v, targetRange)) {
+              matches = true;
+              displayVer = v.version;
+            }
+          }
         }
       }
 
@@ -64,7 +111,7 @@ function checkDeps(deps: DepRef[], file: string): AstCapabilityFact[] {
       const key = `${pkg.name}@${displayVer}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const snippet = `${dep.name}@${displayVer} matches ${pkg.advisoryId} (${pkg.name} ${pkg.versionRange}: ${pkg.reason})`.slice(0, 200);
+      const snippet = `${dep.name}@${displayVer} matches ${pkg.advisoryId} (${pkg.name} ${targetRange}: ${pkg.reason})`.slice(0, 200);
       facts.push({
         ruleId: 'LOCKFILE_KNOWN_BAD',
         category: 'STARTUP_HOOK',
@@ -204,7 +251,7 @@ function depsFromRequirements(content: string): DepRef[] {
     if (pin) version = pin[1];
     else {
       const loose = /(?:>=|<=|~=|>|<|!=|\^)\s*([0-9][^\s,;]*)/.exec(rest);
-      if (loose) version = loose[1];
+      if (loose) version = rest.trim();
     }
     if (version) deps.push({ name, version, line: i + 1 });
     else deps.push({ name, version: 'unpinned', line: i + 1 });

@@ -3,9 +3,9 @@
  * §3 (Tier 2 additions: bytepath-taint + tls-windows-probe).
  */
 export { extractMarkdownCodeBlocks } from './markdown.js';
-export { scanJavascript } from './scan-javascript.js';
+export { scanJavascript, stripTypeScriptTypes, isTypeScript } from './scan-javascript.js';
 export { scanShellSnippet } from './scan-shell.js';
-export { scanPythonCode, scanPythonPth } from './scan-python.js';
+export { scanPythonCode, scanPythonPth, scanDirectoryForPth } from './scan-python.js';
 export { scanSkillMarkdown } from './scan-skill.js';
 export type { SkillScanResult } from './scan-skill.js';
 export { scanLockfile, matchesVersionRange } from './lockfile.js';

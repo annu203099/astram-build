@@ -124,10 +124,18 @@ export function extractNpmPackages(commandLine: string): ParsedPackageSpec[] {
   return specs;
 }
 
+export interface PackageInstallScanOptions {
+  unpinnedRisk?: RiskLevel;
+}
+
 /**
  * Scans a string (e.g. MCP tool-call argument) for malicious package installation commands.
  */
-export function scanPackageInstall(value: string, file: string): AstCapabilityFact[] {
+export function scanPackageInstall(
+  value: string,
+  file: string,
+  options?: PackageInstallScanOptions
+): AstCapabilityFact[] {
   const facts: AstCapabilityFact[] = [];
   if (!value || typeof value !== 'string') return facts;
 
@@ -152,13 +160,16 @@ export function scanPackageInstall(value: string, file: string): AstCapabilityFa
         const normBadName = normalizePackageName(bad.name);
         if (normName !== normBadName) continue;
 
+        const effectiveRange = bad.vulnerableVersion ?? bad.versionRange;
         let matches = false;
         let displayVersion = spec.version ?? 'unpinned';
+        let isUnpinned = false;
 
         if (!spec.version) {
           // Unpinned installation of known malicious package is blocked
           matches = true;
-        } else if (matchesVersionRange(spec.version, bad.versionRange)) {
+          isUnpinned = true;
+        } else if (matchesVersionRange(spec.version, effectiveRange)) {
           matches = true;
           displayVersion = spec.version;
         }
@@ -168,13 +179,27 @@ export function scanPackageInstall(value: string, file: string): AstCapabilityFa
           if (seenKeys.has(key)) continue;
           seenKeys.add(key);
 
+          let risk = RiskLevel.HOLD;
+          let ruleId = 'ARG_MALICIOUS_PACKAGE_INSTALL';
+          let snippet = `Blocked ${spec.manager} install of malicious package ${spec.name}@${displayVersion} matching ${bad.advisoryId} (${bad.name} ${effectiveRange}: ${bad.reason})`.slice(0, 200);
+
+          if (isUnpinned && bad.versionRange !== '*') {
+            if (options?.unpinnedRisk !== undefined) {
+              risk = options.unpinnedRisk;
+              if (risk === RiskLevel.WARN) {
+                ruleId = 'ARG_PACKAGE_INSTALL_UNPINNED';
+                snippet = `Warning: unpinned install of ${spec.name} with known vulnerable version ${effectiveRange} (${bad.advisoryId})`.slice(0, 200);
+              }
+            }
+          }
+
           facts.push({
-            ruleId: 'ARG_MALICIOUS_PACKAGE_INSTALL',
+            ruleId,
             category: 'STARTUP_HOOK',
             file,
             line: lineNo,
-            snippet: `Blocked ${spec.manager} install of malicious package ${spec.name}@${displayVersion} matching ${bad.advisoryId} (${bad.name} ${bad.versionRange}: ${bad.reason})`.slice(0, 200),
-            deterministicRisk: RiskLevel.HOLD,
+            snippet,
+            deterministicRisk: risk,
           });
         }
       }
