@@ -13,12 +13,16 @@ export type WsState = 'connecting' | 'open' | 'reconnecting';
 
 const RECONNECT_DELAY_MS = 2000;
 
-export function useTelemetry(onEvent: (event: TelemetryEvent) => void): WsState {
+export function useTelemetry(
+  onEvent: (event: TelemetryEvent) => void,
+  enabled: boolean = true
+): WsState {
   const [state, setState] = useState<WsState>('connecting');
   const handlerRef = useRef(onEvent);
   handlerRef.current = onEvent;
 
   useEffect(() => {
+    if (!enabled) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let socket: WebSocket | null = null;

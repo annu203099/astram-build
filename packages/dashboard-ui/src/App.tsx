@@ -56,8 +56,16 @@ const TX_FEED_CAP = 200;
 const ALERT_CAP = 5;
 const TOAST_TTL_MS = 5000;
 
+// Detect hosted cloud / Vercel web environment vs local desktop / daemon environment
+const isHostedWeb =
+  typeof window !== 'undefined' &&
+  !window.location.hostname.includes('localhost') &&
+  !window.location.hostname.includes('127.0.0.1') &&
+  !Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+
 export function App(): JSX.Element {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (isHostedWeb) return 'landing';
     return window.location.hash === '#dashboard' ? 'dashboard' : 'landing';
   });
   const [tab, setTab] = useState<TabId>('manifest');
@@ -74,6 +82,16 @@ export function App(): JSX.Element {
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
 
   const navigateTo = useCallback((mode: ViewMode): void => {
+    if (isHostedWeb && mode === 'dashboard') {
+      // On hosted Vercel deployments, smoothly scroll to Quick Setup with CLI instructions
+      const setupEl = document.querySelector('#setup');
+      if (setupEl) {
+        setupEl.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        window.location.hash = '#setup';
+      }
+      return;
+    }
     setViewMode(mode);
     window.location.hash = mode;
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -82,7 +100,7 @@ export function App(): JSX.Element {
   useEffect(() => {
     const handleHash = (): void => {
       const hash = window.location.hash;
-      if (hash === '#dashboard') {
+      if (hash === '#dashboard' && !isHostedWeb) {
         setViewMode('dashboard');
       } else if (
         hash === '#landing' ||
@@ -111,8 +129,9 @@ export function App(): JSX.Element {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // ---- daemon health poll (every 5 s) ---------------------------------------
+  // ---- daemon health poll (only in local daemon environment) -----------------
   useEffect(() => {
+    if (isHostedWeb) return;
     let disposed = false;
     const poll = (): void => {
       api
@@ -133,6 +152,7 @@ export function App(): JSX.Element {
   }, []);
 
   const loadManifest = useCallback((): void => {
+    if (isHostedWeb) return;
     api
       .manifest()
       .then((items) =>
@@ -143,7 +163,11 @@ export function App(): JSX.Element {
       );
   }, [pushToast]);
 
-  useEffect(loadManifest, [loadManifest]);
+  useEffect(() => {
+    if (!isHostedWeb) {
+      loadManifest();
+    }
+  }, [loadManifest]);
 
   // ---- WS telemetry fan-out ---------------------------------------------------
   const onEvent = useCallback((event: TelemetryEvent): void => {
@@ -169,7 +193,7 @@ export function App(): JSX.Element {
     }
   }, []);
 
-  const wsState = useTelemetry(onEvent);
+  const wsState = useTelemetry(onEvent, !isHostedWeb && viewMode === 'dashboard');
 
   const dismissAlert = useCallback((id: string): void => {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
