@@ -36,10 +36,10 @@
 |---|------|-------|-------------|--------|
 | M1 | Agent 1: CodeGraph & Blast Radius | Forensic verification of defects, CodeGraph symbol mapping | none | DONE |
 | M2 | Agent 2: Implementation Planning | Phase-by-phase implementation plan & verification specs | M1 | DONE |
-| M3 | Phase 1: Tokens & Styling Hygiene | `theme.ts`, `index.html`, `index.css`, emoji/gradient purge, Lucide icons, status tokens | M2 | READY_FOR_DISPATCH |
-| M4 | Phase 2: Dynamic Notch & Mascot Engine | `<DynamicNotch />`, `<AstraMascot />`, spring physics, header integration | M3 | PLANNED |
-| M5 | Phase 3: Workspace Refactoring | Golden ratio splits, 8pt grid, Slowship Manifest, Live Feed, 3D DAG | M4 | PLANNED |
-| M6 | Phase 4: Feedback Loops & Polish | Feedback sheet in Notch, global keyboard shortcuts, tab segmented control | M5 | PLANNED |
+| M3 | Phase 1: Tokens & Styling Hygiene | `theme.ts`, `index.html`, `index.css`, emoji/gradient purge, Lucide icons, status tokens | M2 | DONE |
+| M4 | Phase 2: Dynamic Notch & Mascot Engine | `<DynamicNotch />`, `<AstraMascot />`, spring physics, header integration | M3 | DONE |
+| M5 | Phase 3: Workspace Refactoring | Golden ratio splits, 8pt grid, Slowship Manifest, Live Feed, 3D DAG | M4 | DONE |
+| M6 | Phase 4: Feedback Loops & Polish | Feedback sheet in Notch, global keyboard shortcuts, tab segmented control | M5 | DONE |
 
 ## Interface Contracts
 ### `packages/dashboard-ui/src/lib/theme.ts`
