@@ -4,7 +4,7 @@
  */
 
 import type { JSX } from 'react';
-import { Sliders, MessageSquare, Command } from 'lucide-react';
+import { Sliders, MessageSquare, Command, BookOpen } from 'lucide-react';
 
 export interface HealthState {
   up: boolean;
@@ -17,12 +17,14 @@ export function Header({
   onOpenWizard,
   onOpenFeedback,
   onOpenShortcuts,
+  onOpenLanding,
 }: {
   health: HealthState | null;
   wsState: 'connecting' | 'open' | 'reconnecting';
   onOpenWizard?: () => void;
   onOpenFeedback?: () => void;
   onOpenShortcuts?: () => void;
+  onOpenLanding?: () => void;
 }): JSX.Element {
   const isUp = health?.up === true;
 
@@ -30,12 +32,16 @@ export function Header({
     <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-black/60 backdrop-blur-2xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 h-14">
         {/* Left: Brand Identity */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.08] border border-white/[0.12] text-white font-mono text-sm font-semibold shadow-inner">
+        <div
+          onClick={onOpenLanding}
+          className={`flex items-center gap-3 ${onOpenLanding ? 'cursor-pointer group' : ''}`}
+          title={onOpenLanding ? 'Back to Astram Overview & Documentation' : undefined}
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.08] border border-white/[0.12] text-white font-mono text-sm font-semibold shadow-inner group-hover:bg-white/[0.12] transition-colors">
             Λ
           </div>
           <div className="flex items-baseline gap-2">
-            <h1 className="text-sm font-semibold tracking-tight text-white">
+            <h1 className="text-sm font-semibold tracking-tight text-white group-hover:text-white transition-colors">
               Astram
             </h1>
             <span className="text-[11px] font-mono text-white/40 tracking-normal">
@@ -49,6 +55,18 @@ export function Header({
 
         {/* Right: Micro Controls */}
         <div className="flex items-center gap-3 text-xs">
+          {onOpenLanding && (
+            <button
+              type="button"
+              onClick={onOpenLanding}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white border border-white/[0.08] text-xs font-medium transition cursor-pointer"
+              title="View Documentation & Architecture Overview"
+            >
+              <BookOpen size={13} className="stroke-[1.8]" />
+              <span className="hidden sm:inline">Docs & Overview</span>
+            </button>
+          )}
+
           {onOpenShortcuts && (
             <button
               type="button"

@@ -29,10 +29,13 @@ import { ToastStack, type Toast } from './components/ToastStack';
 import { DynamicNotch } from './components/DynamicNotch';
 import { CustomerFeedbackModal } from './components/AstraMascot';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { LandingPage } from './components/landing';
 import type { AlertItem } from './components/AlertBanner';
 import { api } from './lib/api';
 import { useTelemetry } from './lib/useTelemetry';
 import { appleSpring } from './lib/theme';
+
+export type ViewMode = 'landing' | 'dashboard';
 
 type TabId = 'manifest' | 'feed' | 'inspector' | 'dag3d';
 
@@ -54,6 +57,9 @@ const ALERT_CAP = 5;
 const TOAST_TTL_MS = 5000;
 
 export function App(): JSX.Element {
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return window.location.hash === '#dashboard' ? 'dashboard' : 'landing';
+  });
   const [tab, setTab] = useState<TabId>('manifest');
   const [health, setHealth] = useState<HealthState | null>(null);
   const [manifest, setManifest] = useState<Record<string, BoardingManifestItem>>({});
@@ -66,6 +72,34 @@ export function App(): JSX.Element {
   });
   const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
+
+  const navigateTo = useCallback((mode: ViewMode): void => {
+    setViewMode(mode);
+    window.location.hash = mode;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
+  useEffect(() => {
+    const handleHash = (): void => {
+      const hash = window.location.hash;
+      if (hash === '#dashboard') {
+        setViewMode('dashboard');
+      } else if (
+        hash === '#landing' ||
+        hash === '' ||
+        hash.startsWith('#pain') ||
+        hash.startsWith('#pillars') ||
+        hash.startsWith('#showcase') ||
+        hash.startsWith('#setup') ||
+        hash.startsWith('#docs') ||
+        hash.startsWith('#faq')
+      ) {
+        setViewMode('landing');
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string): void => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -243,127 +277,150 @@ export function App(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-black text-[#EDEDED] font-sans antialiased selection:bg-white/20">
-      {/* Floating Centered Apple Dynamic Notch */}
-      <DynamicNotch
-        health={health}
-        wsState={wsState}
-        activeAlert={alerts[0] ?? null}
-        txCount={txs.length}
-        onOpenWizard={() => setShowWizard(true)}
-        onOpenFeedback={() => setShowFeedbackModal(true)}
-        onRollbackLatest={rollback}
-      />
-
-      {/* Main Top Header */}
-      <Header
-        health={health}
-        wsState={wsState}
-        onOpenWizard={() => setShowWizard(true)}
-        onOpenFeedback={() => setShowFeedbackModal(true)}
-        onOpenShortcuts={() => setShowShortcutsModal((prev) => !prev)}
-      />
-
-      {/* Onboarding Wizard Sheet */}
-      {showWizard && (
-        <OnboardingWizard
-          onComplete={() => {
-            setShowWizard(false);
-            loadManifest();
-            pushToast('success', 'Zero-trust protection active across selected harnesses');
-          }}
-          onCancel={() => setShowWizard(false)}
-        />
-      )}
-
-      {/* Customer Feedback Modal */}
-      <CustomerFeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-        onSubmitFeedback={handleFeedbackSubmit}
-      />
-
-      {/* Keyboard Shortcuts Sheet */}
-      <KeyboardShortcutsModal
-        isOpen={showShortcutsModal}
-        onClose={() => setShowShortcutsModal(false)}
-      />
-
-      {/* Apple-style Segmented Navigation Control */}
-      <nav className="border-b border-white/[0.08] bg-[#09090B]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-2.5">
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
-            {TABS.map(({ id, label, icon: Icon }) => {
-              const isActive = tab === id;
-
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setTab(id)}
-                  className={`relative flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                    isActive ? 'text-white' : 'text-white/50 hover:text-white/80'
-                  }`}
-                >
-                  {/* Sliding spring background indicator */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTabIndicator"
-                      transition={appleSpring.gentle}
-                      className="absolute inset-0 rounded-xl bg-white/[0.12] border border-white/[0.14] shadow-sm"
-                    />
-                  )}
-
-                  <span className="relative z-10 flex items-center gap-2">
-                    <Icon size={13} className={isActive ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
-                    <span>{label}</span>
-
-                    {id === 'manifest' && manifestItems.length > 0 && (
-                      <span className="ml-1 rounded-full bg-white/[0.1] px-1.5 py-0.2 text-[10px] text-white/70 font-mono tabular-nums">
-                        {manifestItems.length}
-                      </span>
-                    )}
-                    {id === 'feed' && txs.length > 0 && (
-                      <span className="ml-1 rounded-full bg-white/[0.1] px-1.5 py-0.2 text-[10px] text-white/70 font-mono tabular-nums">
-                        {txs.length}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 text-xs text-white/40 font-mono">
-            <span>Invariant I1:</span>
-            <span className="text-[#30D158] font-semibold">LOCKED</span>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Workspace with Physics Animation */}
-      <main className="mx-auto max-w-7xl px-6 py-6">
-        <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait">
+        {viewMode === 'landing' ? (
           <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            key="landing"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={appleSpring.snappy}
           >
-            {tab === 'manifest' && <ManifestTab items={manifestItems} onRefresh={loadManifest} />}
-            {tab === 'feed' && (
-              <FeedTab
-                txs={txs}
-                alerts={alerts}
-                onDismissAlert={dismissAlert}
-                onRollback={rollback}
+            <LandingPage onLaunchDashboard={() => navigateTo('dashboard')} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="dashboard"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={appleSpring.snappy}
+          >
+            {/* Floating Centered Apple Dynamic Notch */}
+            <DynamicNotch
+              health={health}
+              wsState={wsState}
+              activeAlert={alerts[0] ?? null}
+              txCount={txs.length}
+              onOpenWizard={() => setShowWizard(true)}
+              onOpenFeedback={() => setShowFeedbackModal(true)}
+              onRollbackLatest={rollback}
+            />
+
+            {/* Main Top Header */}
+            <Header
+              health={health}
+              wsState={wsState}
+              onOpenWizard={() => setShowWizard(true)}
+              onOpenFeedback={() => setShowFeedbackModal(true)}
+              onOpenShortcuts={() => setShowShortcutsModal((prev) => !prev)}
+              onOpenLanding={() => navigateTo('landing')}
+            />
+
+            {/* Onboarding Wizard Sheet */}
+            {showWizard && (
+              <OnboardingWizard
+                onComplete={() => {
+                  setShowWizard(false);
+                  loadManifest();
+                  pushToast('success', 'Zero-trust protection active across selected harnesses');
+                }}
+                onCancel={() => setShowWizard(false)}
               />
             )}
-            {tab === 'inspector' && <InspectorTab />}
-            {tab === 'dag3d' && <Dag3dTab dag={dag} />}
+
+            {/* Customer Feedback Modal */}
+            <CustomerFeedbackModal
+              isOpen={showFeedbackModal}
+              onClose={() => setShowFeedbackModal(false)}
+              onSubmitFeedback={handleFeedbackSubmit}
+            />
+
+            {/* Keyboard Shortcuts Sheet */}
+            <KeyboardShortcutsModal
+              isOpen={showShortcutsModal}
+              onClose={() => setShowShortcutsModal(false)}
+            />
+
+            {/* Apple-style Segmented Navigation Control */}
+            <nav className="border-b border-white/[0.08] bg-[#09090B]">
+              <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-2.5">
+                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
+                  {TABS.map(({ id, label, icon: Icon }) => {
+                    const isActive = tab === id;
+
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTab(id)}
+                        className={`relative flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                          isActive ? 'text-white' : 'text-white/50 hover:text-white/80'
+                        }`}
+                      >
+                        {/* Sliding spring background indicator */}
+                        {isActive && (
+                          <motion.div
+                            layoutId="activeTabIndicator"
+                            transition={appleSpring.gentle}
+                            className="absolute inset-0 rounded-xl bg-white/[0.12] border border-white/[0.14] shadow-sm"
+                          />
+                        )}
+
+                        <span className="relative z-10 flex items-center gap-2">
+                          <Icon size={13} className={isActive ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
+                          <span>{label}</span>
+
+                          {id === 'manifest' && manifestItems.length > 0 && (
+                            <span className="ml-1 rounded-full bg-white/[0.1] px-1.5 py-0.2 text-[10px] text-white/70 font-mono tabular-nums">
+                              {manifestItems.length}
+                            </span>
+                          )}
+                          {id === 'feed' && txs.length > 0 && (
+                            <span className="ml-1 rounded-full bg-white/[0.1] px-1.5 py-0.2 text-[10px] text-white/70 font-mono tabular-nums">
+                              {txs.length}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden sm:flex items-center gap-2 text-xs text-white/40 font-mono">
+                  <span>Invariant I1:</span>
+                  <span className="text-[#30D158] font-semibold">LOCKED</span>
+                </div>
+              </div>
+            </nav>
+
+            {/* Main Workspace with Physics Animation */}
+            <main className="mx-auto max-w-7xl px-6 py-6">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={appleSpring.snappy}
+                >
+                  {tab === 'manifest' && <ManifestTab items={manifestItems} onRefresh={loadManifest} />}
+                  {tab === 'feed' && (
+                    <FeedTab
+                      txs={txs}
+                      alerts={alerts}
+                      onDismissAlert={dismissAlert}
+                      onRollback={rollback}
+                    />
+                  )}
+                  {tab === 'inspector' && <InspectorTab />}
+                  {tab === 'dag3d' && <Dag3dTab dag={dag} />}
+                </motion.div>
+              </AnimatePresence>
+            </main>
           </motion.div>
-        </AnimatePresence>
-      </main>
+        )}
+      </AnimatePresence>
 
       {/* Floating Apple Toast Notifications */}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
