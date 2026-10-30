@@ -2,13 +2,13 @@
  * Tab 1 — Slowship Boarding Manifest (Apple Human Interface Standard).
  *
  * Scans every package, skill, and tool before execution.
- * Fluid spring expansion for evidence and AST facts inspection.
+ * Fluid spring expansion for evidence and AST facts inspection with 8pt spatial grid.
  */
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, useMemo } from 'react';
 import type { JSX } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RotateCw, ChevronRight, FileCode, CheckCircle2 } from 'lucide-react';
+import { RotateCw, ChevronRight, FileCode, CheckCircle2, Search, Filter } from 'lucide-react';
 import type { BoardingManifestItem } from '@astram/types';
 import { deltaLabel, prettyJson, relativeTime } from '../lib/format';
 import { RiskBadge } from './Badges';
@@ -31,11 +31,37 @@ export function ManifestTab({
   onRefresh: () => void;
 }): JSX.Element {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const matchesSearch =
+        searchQuery === '' ||
+        item.targetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.itemId.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        selectedCategory === 'ALL' || item.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [items, searchQuery, selectedCategory]);
+
+  const stats = useMemo(() => {
+    let pass = 0;
+    let warn = 0;
+    let hold = 0;
+    for (const item of items) {
+      if (item.finalStatus === 'PASS') pass++;
+      else if (item.finalStatus === 'WARN') warn++;
+      else if (item.finalStatus === 'HOLD') hold++;
+    }
+    return { total: items.length, pass, warn, hold };
+  }, [items]);
 
   return (
     <section className="space-y-4">
-      {/* Top action & description bar */}
-      <div className="flex items-center justify-between">
+      {/* Top action & metrics bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold tracking-tight text-white">
             Slowship Boarding Manifest
@@ -45,14 +71,72 @@ export function ManifestTab({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white border border-white/[0.08] text-xs font-medium transition cursor-pointer"
-        >
-          <RotateCw size={12} className="stroke-[2]" />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Quick Metrics Bar */}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[11px] font-mono">
+            <span className="text-white/40">Total:</span>
+            <span className="text-white font-medium">{stats.total}</span>
+            <span className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="text-[#30D158] font-medium">{stats.pass} PASS</span>
+            {stats.warn > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-white/20" />
+                <span className="text-[#FF9F0A] font-medium">{stats.warn} WARN</span>
+              </>
+            )}
+            {stats.hold > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-white/20" />
+                <span className="text-[#FF453A] font-medium">{stats.hold} HOLD</span>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white border border-white/[0.08] text-xs font-medium transition cursor-pointer active:scale-95"
+          >
+            <RotateCw size={12} className="stroke-[2]" />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Apple Search & Category Filter Control */}
+      <div className="flex flex-col sm:flex-row items-center gap-2.5">
+        <div className="relative flex-1 w-full">
+          <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search boarding items by target name or item ID…"
+            className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white placeholder-white/35 focus:outline-none focus:border-white/25 transition-colors font-sans"
+          />
+        </div>
+
+        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-white/[0.04] border border-white/[0.08] self-stretch sm:self-auto overflow-x-auto scrollbar-thin">
+          {[
+            { id: 'ALL', label: 'All' },
+            { id: 'LOCKFILE_PKG', label: 'Packages' },
+            { id: 'AGENT_SKILL', label: 'Skills' },
+            { id: 'MCP_SERVER', label: 'MCP' },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                selectedCategory === cat.id
+                  ? 'bg-white text-black font-semibold shadow-sm'
+                  : 'text-white/50 hover:text-white/80'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Apple-style Grouped Table Card */}
@@ -70,13 +154,13 @@ export function ManifestTab({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
-            {items.length === 0 ? (
+            {filteredItems.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-14 text-center text-white/40">
                   <div className="max-w-sm mx-auto space-y-2">
                     <FileCode size={28} className="mx-auto text-white/20 stroke-[1.5]" />
                     <p className="text-xs font-medium text-white/60">
-                      No boarding items recorded yet
+                      {searchQuery ? 'No items match your filter criteria' : 'No boarding items recorded yet'}
                     </p>
                     <p className="text-[11px] text-white/40">
                       Run <code className="rounded bg-white/[0.08] px-1.5 py-0.5 font-mono text-white/70">astram protect</code> to board harnesses.
@@ -85,7 +169,7 @@ export function ManifestTab({
                 </td>
               </tr>
             ) : (
-              items.map((item) => {
+              filteredItems.map((item) => {
                 const isExpanded = expandedId === item.itemId;
 
                 return (
@@ -104,7 +188,7 @@ export function ManifestTab({
                           <ChevronRight size={13} />
                         </motion.div>
                       </td>
-                      <td className="px-3 py-3.5 font-medium text-white max-w-xs truncate">
+                      <td className="px-3 py-3.5 font-medium text-white max-w-xs truncate font-mono">
                         {item.targetName}
                       </td>
                       <td className="px-4 py-3.5 text-white/50">
@@ -150,20 +234,20 @@ export function ManifestTab({
                               <span className="w-1 h-1 rounded-full bg-white/20" />
                               <span className="flex items-center gap-1 text-[#30D158]">
                                 <CheckCircle2 size={12} />
-                                <span>{item.ed25519Sig ? 'Cryptographically Signed' : 'Local Verification'}</span>
+                                <span>{item.ed25519Sig ? 'Cryptographically Signed' : 'Deterministic Verification'}</span>
                               </span>
                             </div>
 
-                            <div className="rounded-xl bg-black/50 border border-white/[0.06] p-3 text-xs">
-                              <span className="font-semibold text-white/50 block mb-1 uppercase text-[10px] tracking-wider">
+                            <div className="rounded-xl bg-black/50 border border-white/[0.06] p-3.5 text-xs">
+                              <span className="font-semibold text-white/45 block mb-1 uppercase text-[10px] tracking-wider">
                                 Observed Evidence Summary
                               </span>
-                              <p className="text-white/80 leading-relaxed font-sans">
+                              <p className="text-white/85 leading-relaxed font-sans">
                                 {item.evidenceSummary || 'No behavioral anomalies reported for this item.'}
                               </p>
                             </div>
 
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               <span className="font-semibold text-white/45 block uppercase text-[10px] tracking-wider">
                                 AST Capability Extraction
                               </span>

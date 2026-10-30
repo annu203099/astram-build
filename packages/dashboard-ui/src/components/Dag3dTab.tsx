@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX, PointerEvent as ReactPointerEvent } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { RotateCcw } from 'lucide-react';
 import type { DagEdge, DagNode } from '@astram/types';
 import { api } from '../lib/api';
 import { riskName } from '../lib/format';
@@ -367,6 +368,22 @@ export function Dag3dTab({ dag }: { dag: { nodes: DagNode[]; edges: DagEdge[] } 
             ))}
           </Canvas>
 
+          {/* Reset Camera View Floating Pill */}
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+            <button
+              type="button"
+              onClick={() => {
+                orbitRef.current = { theta: 0.6, phi: 0.9, radius: 14 };
+                userZoomed.current = false;
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#121214]/90 border border-white/[0.12] text-[11px] font-medium text-white/70 hover:text-white backdrop-blur-md transition cursor-pointer active:scale-95"
+              title="Reset Camera Orientation"
+            >
+              <RotateCcw size={11} className="stroke-[2.2]" />
+              <span>Reset View</span>
+            </button>
+          </div>
+
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <p className="rounded-xl border border-white/[0.08] bg-[#0D0D0F]/90 backdrop-blur-md px-4 py-3 text-xs text-white/50">
@@ -396,48 +413,50 @@ export function Dag3dTab({ dag }: { dag: { nodes: DagNode[]; edges: DagEdge[] } 
           {!selected ? (
             <p className="text-white/40 text-xs">Click a sphere in the fiber tree to inspect details.</p>
           ) : (
-            <dl className="space-y-1.5 text-zinc-300">
+            <dl className="space-y-2 text-white/80">
               <div>
-                <dt className="text-xs text-zinc-500">txId</dt>
-                <dd className="break-all font-mono text-xs text-zinc-200">{selected.txId}</dd>
+                <dt className="text-[10px] uppercase tracking-wider text-white/40">Transaction ID</dt>
+                <dd className="break-all font-mono text-xs text-white mt-0.5">{selected.txId}</dd>
               </div>
-              <div className="flex items-center gap-2">
-                <dt className="text-xs text-zinc-500">Disposition</dt>
-                <dd className="font-medium" style={{ color: nodeColor(selected) }}>
+              <div className="flex items-center justify-between border-t border-white/[0.04] pt-1.5">
+                <dt className="text-white/40">Disposition</dt>
+                <dd className="font-medium font-mono text-xs" style={{ color: nodeColor(selected) }}>
                   {selected.disposition}
                 </dd>
               </div>
-              <div className="flex items-center gap-2">
-                <dt className="text-xs text-zinc-500">Final risk</dt>
-                <dd>{riskName(selected.finalRisk)}</dd>
+              <div className="flex items-center justify-between border-t border-white/[0.04] pt-1.5">
+                <dt className="text-white/40">Final Risk</dt>
+                <dd className="font-medium">{riskName(selected.finalRisk)}</dd>
               </div>
               {selected.label !== undefined && (
-                <div className="flex items-center gap-2">
-                  <dt className="text-xs text-zinc-500">Label</dt>
-                  <dd>{selected.label}</dd>
+                <div className="flex items-center justify-between border-t border-white/[0.04] pt-1.5">
+                  <dt className="text-white/40">Branch Label</dt>
+                  <dd className="font-mono text-xs text-white/70">{selected.label}</dd>
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <dt className="text-xs text-zinc-500">Canary fork</dt>
-                <dd>{selected.canaryFork ? 'yes (gold branch)' : 'no'}</dd>
+              <div className="flex items-center justify-between border-t border-white/[0.04] pt-1.5">
+                <dt className="text-white/40">Canary Fork</dt>
+                <dd className="font-medium" style={{ color: selected.canaryFork ? '#FF9F0A' : 'inherit' }}>
+                  {selected.canaryFork ? 'Active (Self-Healing)' : 'No (Mainline)'}
+                </dd>
               </div>
-              <div>
-                <dt className="text-xs text-zinc-500">Parent</dt>
-                <dd className="break-all font-mono text-xs text-zinc-400">
-                  {selected.parentTxId ?? '— (root)'}
+              <div className="border-t border-white/[0.04] pt-1.5">
+                <dt className="text-[10px] uppercase tracking-wider text-white/40">Parent Reference</dt>
+                <dd className="break-all font-mono text-[11px] text-white/60 mt-0.5">
+                  {selected.parentTxId ?? '— (Root Origin)'}
                 </dd>
               </div>
             </dl>
           )}
 
-          <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Legend
+          <h3 className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+            Branch Legend
           </h3>
-          <ul className="space-y-1 text-xs text-zinc-400">
+          <ul className="space-y-1.5 text-xs text-white/60">
             {legend.map((l) => (
               <li key={l.label} className="flex items-center gap-2">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: l.color }} />
-                {l.label}
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: l.color }} />
+                <span>{l.label}</span>
               </li>
             ))}
           </ul>
