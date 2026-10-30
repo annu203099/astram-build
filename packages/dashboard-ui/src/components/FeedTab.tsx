@@ -1,16 +1,18 @@
 /**
- * Tab 2 — Live MCP Feed.
+ * Tab 2 — Live MCP Feed (Apple Human Interface Standard).
  *
- * WS 'tx' events are prepended (cap 200); 'alert' events show a dismissible
- * red banner on top. HOLD rows carry a Rollback button — the Tier-2 daemon
- * answers 200 with an honest JSON verdict (pre-exec block / unavailable);
- * App.tsx renders the result as a toast.
+ * Real-time audit transactions streamed via WebSocket.
+ * Physics-based entry and rollback controls for HOLD violations.
  */
+
 import type { JSX } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { RotateCcw, Activity } from 'lucide-react';
 import type { AtomicAuditTx } from '@astram/types';
 import { clockTime, riskName } from '../lib/format';
 import { AlertBanner, type AlertItem } from './AlertBanner';
 import { DispositionLabel, HostBadge, RiskBadge } from './Badges';
+import { appleSpring } from '../lib/theme';
 
 export function FeedTab({
   txs,
@@ -24,78 +26,109 @@ export function FeedTab({
   onRollback: (txId: string) => void;
 }): JSX.Element {
   return (
-    <section>
-      {alerts.map((alert) => (
-        <AlertBanner key={alert.id} alert={alert} onDismiss={onDismissAlert} />
-      ))}
+    <section className="space-y-4">
+      {/* Alerts Stack */}
+      <AnimatePresence>
+        {alerts.map((alert) => (
+          <AlertBanner key={alert.id} alert={alert} onDismiss={onDismissAlert} />
+        ))}
+      </AnimatePresence>
 
-      <p className="mb-3 text-sm text-zinc-400">
-        Atomic audit transactions as they happen. Showing the latest {txs.length}
-        {txs.length >= 200 ? ' (capped at 200)' : ''}.
-      </p>
+      {/* Header bar */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight text-white">
+            Live MCP Audit Transactions
+          </h2>
+          <p className="text-xs text-white/50">
+            Real-time pre-execution intercept stream. Showing latest {txs.length} transactions.
+          </p>
+        </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <table className="w-full text-sm">
+        {txs.length > 0 && (
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono text-white/50">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#30D158] animate-pulse" />
+            <span>Streaming</span>
+          </span>
+        )}
+      </div>
+
+      {/* Grouped Table */}
+      <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0D0D0F]">
+        <table className="w-full text-left text-xs">
           <thead>
-            <tr className="bg-zinc-900/80 text-left text-xs uppercase tracking-wider text-zinc-500">
-              <th className="px-4 py-2.5 font-medium">Time</th>
-              <th className="px-4 py-2.5 font-medium">Host</th>
-              <th className="px-4 py-2.5 font-medium">Tool</th>
-              <th className="px-4 py-2.5 font-medium">Final</th>
-              <th className="px-4 py-2.5 font-medium">Disposition</th>
-              <th className="px-4 py-2.5 font-medium">Anomaly</th>
-              <th className="px-4 py-2.5 font-medium" />
+            <tr className="border-b border-white/[0.06] bg-white/[0.02] text-[11px] font-medium uppercase tracking-wider text-white/45">
+              <th className="px-5 py-3">Timestamp</th>
+              <th className="px-4 py-3">Harness</th>
+              <th className="px-4 py-3">Tool & MCP Server</th>
+              <th className="px-4 py-3">Final Risk</th>
+              <th className="px-4 py-3">Disposition</th>
+              <th className="px-4 py-3 font-mono">Anomaly</th>
+              <th className="px-4 py-3 text-right">Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-white/[0.04]">
             {txs.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-zinc-500">
-                  Waiting for tx telemetry — wrap an MCP server with{' '}
-                  <code className="rounded bg-zinc-800 px-1.5 py-0.5">astram protect</code> and make a tool call.
+                <td colSpan={7} className="px-6 py-14 text-center text-white/40">
+                  <div className="max-w-sm mx-auto space-y-2">
+                    <Activity size={28} className="mx-auto text-white/20 stroke-[1.5]" />
+                    <p className="text-xs font-medium text-white/60">
+                      Awaiting tool telemetry
+                    </p>
+                    <p className="text-[11px] text-white/40">
+                      Wrap an MCP server with <code className="rounded bg-white/[0.08] px-1.5 py-0.5 font-mono text-white/70">astram protect</code> and trigger a call.
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
               txs.map((tx) => {
                 const final = riskName(tx.finalMonotonicRisk);
+                const isHold = final === 'HOLD';
+
                 return (
-                  <tr
+                  <motion.tr
                     key={`${tx.txId}:${tx.timestampMs}`}
-                    className={`border-t border-zinc-800/70 ${
-                      final === 'HOLD' ? 'bg-red-500/[0.04]' : ''
-                    }`}
+                    initial={{ opacity: 0, backgroundColor: isHold ? 'rgba(255, 69, 58, 0.15)' : 'rgba(255, 255, 255, 0.05)' }}
+                    animate={{ opacity: 1, backgroundColor: isHold ? 'rgba(255, 69, 58, 0.04)' : 'rgba(0, 0, 0, 0)' }}
+                    transition={appleSpring.fluid}
+                    className="hover:bg-white/[0.02] transition-colors"
                   >
-                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-400">
+                    <td className="whitespace-nowrap px-5 py-3 font-mono text-[11px] text-white/45">
                       {clockTime(tx.timestampMs)}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <HostBadge host={tx.agentHost} />
                     </td>
-                    <td className="px-4 py-2.5">
-                      <span className="font-mono text-zinc-200">{tx.toolName}</span>
-                      <span className="ml-2 text-xs text-zinc-500">{tx.mcpServerId}</span>
+                    <td className="px-4 py-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-mono text-white font-medium">{tx.toolName}</span>
+                        <span className="font-mono text-[11px] text-white/40">{tx.mcpServerId}</span>
+                      </div>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <RiskBadge label={final} />
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <DispositionLabel disposition={tx.disposition} />
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-400 tabular-nums">
+                    <td className="px-4 py-3 font-mono text-[11px] text-white/50 tabular-nums">
                       {tx.anomalyScore.toFixed(2)}
                     </td>
-                    <td className="px-4 py-2.5 text-right">
-                      {final === 'HOLD' && (
+                    <td className="px-4 py-3 text-right">
+                      {isHold && (
                         <button
                           type="button"
                           onClick={() => onRollback(tx.txId)}
-                          className="rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-medium text-sky-300 transition hover:border-sky-400 hover:bg-sky-500/20"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FF453A]/15 hover:bg-[#FF453A]/25 text-[#FF453A] border border-[#FF453A]/30 text-xs font-medium transition cursor-pointer"
                         >
-                          Rollback
+                          <RotateCcw size={11} className="stroke-[2.5]" />
+                          <span>Rollback</span>
                         </button>
                       )}
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })
             )}

@@ -1,17 +1,18 @@
-/** Bottom-right toast stack (success / error / info), auto-dismissed. */
+/**
+ * Apple-Grade Physics-Based Toast Stack.
+ * Floats in bottom-right with fluid spring entrance, auto-dismissal, and tactile close.
+ */
+
 import type { JSX } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, AlertTriangle, AlertCircle, X } from 'lucide-react';
+import { appleSpring } from '../lib/theme';
 
 export interface Toast {
   id: string;
   kind: 'success' | 'error' | 'info';
   text: string;
 }
-
-const TOAST_STYLES: Record<Toast['kind'], string> = {
-  success: 'border-emerald-500/50 bg-emerald-950/90 text-emerald-200',
-  error: 'border-red-500/50 bg-red-950/90 text-red-200',
-  info: 'border-zinc-600 bg-zinc-900/95 text-zinc-200',
-};
 
 export function ToastStack({
   toasts,
@@ -21,25 +22,56 @@ export function ToastStack({
   onDismiss: (id: string) => void;
 }): JSX.Element | null {
   if (toasts.length === 0) return null;
+
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          role="status"
-          className={`pointer-events-auto flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm shadow-lg shadow-black/40 ${TOAST_STYLES[toast.kind]}`}
-        >
-          <p className="min-w-0 flex-1 break-words">{toast.text}</p>
-          <button
-            type="button"
-            onClick={() => onDismiss(toast.id)}
-            aria-label="Dismiss"
-            className="shrink-0 rounded p-0.5 text-xs opacity-60 transition hover:opacity-100"
-          >
-            ✕
-          </button>
-        </div>
-      ))}
+    <div className="pointer-events-none fixed bottom-5 right-5 z-50 flex w-84 flex-col gap-2.5">
+      <AnimatePresence>
+        {toasts.map((toast) => {
+          const isSuccess = toast.kind === 'success';
+          const isError = toast.kind === 'error';
+
+          return (
+            <motion.div
+              key={toast.id}
+              role="status"
+              initial={{ opacity: 0, y: 16, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+              transition={appleSpring.fluid}
+              className={`pointer-events-auto flex items-start gap-3 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-2xl bg-[#121214]/95 ${
+                isError
+                  ? 'border-[#FF453A]/30 text-white'
+                  : isSuccess
+                    ? 'border-[#30D158]/30 text-white'
+                    : 'border-white/[0.12] text-white'
+              }`}
+            >
+              <div className="shrink-0 mt-0.5">
+                {isError ? (
+                  <AlertCircle size={15} className="text-[#FF453A] stroke-[2.2]" />
+                ) : isSuccess ? (
+                  <CheckCircle2 size={15} className="text-[#30D158] stroke-[2.2]" />
+                ) : (
+                  <AlertTriangle size={15} className="text-[#FF9F0A] stroke-[2.2]" />
+                )}
+              </div>
+
+              <p className="min-w-0 flex-1 text-xs leading-relaxed text-white/85">
+                {toast.text}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => onDismiss(toast.id)}
+                aria-label="Dismiss toast"
+                className="shrink-0 text-white/40 hover:text-white p-0.5 rounded-md transition-colors"
+              >
+                <X size={13} />
+              </button>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }

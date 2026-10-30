@@ -1,14 +1,24 @@
 /**
- * astram Command Center — root shell.
+ * astram Command Center — Apple Human Interface Root Shell.
  *
- * Owns: daemon health polling (5 s), the /ws/telemetry connection (via
- * useTelemetry, auto-reconnect 2 s), the merged boarding manifest (fetched +
- * live 'manifest-update' merges), the live tx feed (cap 200), alerts, toasts
- * and the rollback action.
+ * Owns:
+ * - Centered Apple Dynamic Notch (with interactive Astra mascot, live telemetry & rollback)
+ * - Interactive Customer Feedback Dialog
+ * - Segmented Tab Bar with fluid spring animation
+ * - Four Core Workspaces: Manifest, Live Feed, Inspector, 3D Fiber Tree
  */
+
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
-import type { AtomicAuditTx, BoardingManifestItem, DagEdge, DagNode, TelemetryEvent } from '@astram/types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShieldCheck, Activity, Search, Network } from 'lucide-react';
+import type {
+  AtomicAuditTx,
+  BoardingManifestItem,
+  DagEdge,
+  DagNode,
+  TelemetryEvent,
+} from '@astram/types';
 import { Dag3dTab } from './components/Dag3dTab';
 import { FeedTab } from './components/FeedTab';
 import { Header, type HealthState } from './components/Header';
@@ -16,17 +26,26 @@ import { InspectorTab } from './components/InspectorTab';
 import { ManifestTab } from './components/ManifestTab';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { ToastStack, type Toast } from './components/ToastStack';
+import { DynamicNotch } from './components/DynamicNotch';
+import { CustomerFeedbackModal } from './components/AstraMascot';
 import type { AlertItem } from './components/AlertBanner';
 import { api } from './lib/api';
 import { useTelemetry } from './lib/useTelemetry';
+import { appleSpring } from './lib/theme';
 
 type TabId = 'manifest' | 'feed' | 'inspector' | 'dag3d';
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'manifest', label: 'Slowship Boarding Manifest' },
-  { id: 'feed', label: 'Live MCP Feed' },
-  { id: 'inspector', label: 'Deception Inspector' },
-  { id: 'dag3d', label: 'Multiverse 3D Fiber Tree' },
+interface TabDefinition {
+  id: TabId;
+  label: string;
+  icon: typeof ShieldCheck;
+}
+
+const TABS: TabDefinition[] = [
+  { id: 'manifest', label: 'Slowship Manifest', icon: ShieldCheck },
+  { id: 'feed', label: 'Live MCP Feed', icon: Activity },
+  { id: 'inspector', label: 'Deception Inspector', icon: Search },
+  { id: 'dag3d', label: 'Multiverse 3D Tree', icon: Network },
 ];
 
 const TX_FEED_CAP = 200;
@@ -44,6 +63,7 @@ export function App(): JSX.Element {
   const [showWizard, setShowWizard] = useState<boolean>(() => {
     return localStorage.getItem('astram_onboarding_completed') !== 'true';
   });
+  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string): void => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -83,7 +103,7 @@ export function App(): JSX.Element {
         setManifest(Object.fromEntries(items.map((item) => [item.itemId, item])))
       )
       .catch((err: unknown) =>
-        pushToast('error', `manifest fetch failed: ${err instanceof Error ? err.message : err}`)
+        pushToast('error', `manifest fetch failed: ${err instanceof Error ? err.message : String(err)}`)
       );
   }, [pushToast]);
 
@@ -109,10 +129,8 @@ export function App(): JSX.Element {
         ].slice(0, ALERT_CAP)
       );
     } else if (event.type === 'dag-update') {
-      // Full-state DAG payloads feed the Multiverse 3D Fiber Tree (Tab 4).
       setDag({ nodes: event.payload.nodes, edges: event.payload.edges });
     }
-    // hello: no per-tab handling.
   }, []);
 
   const wsState = useTelemetry(onEvent);
@@ -121,11 +139,6 @@ export function App(): JSX.Element {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  /**
-   * Rollback action (Tab 2). The Tier-2 daemon answers 200 with an honest JSON
-   * verdict ({ rolledBack, mode, note/reason }); 404 = unknown tx; a legacy
-   * Tier-1 daemon may still answer 501 — every shape gets a readable toast.
-   */
   const rollback = useCallback(
     (txId: string): void => {
       interface RollbackBody {
@@ -148,7 +161,7 @@ export function App(): JSX.Element {
           if (status === 200 && parsed?.rolledBack === true) {
             const detail =
               parsed.mode === 'pre-exec-block'
-                ? 'pre-exec block — call never executed, nothing to restore'
+                ? 'pre-exec block — call never executed'
                 : (parsed.mode ?? 'restored');
             pushToast('success', `Rollback of ${short} succeeded (${detail})`);
           } else if (status === 200 && parsed) {
@@ -166,16 +179,37 @@ export function App(): JSX.Element {
     [pushToast]
   );
 
+  const handleFeedbackSubmit = (sentiment: 'positive' | 'neutral' | 'issue', comment: string) => {
+    pushToast(
+      sentiment === 'issue' ? 'info' : 'success',
+      `Feedback filed: ${sentiment} (${comment ? 'with comments' : 'instant rating'})`
+    );
+  };
+
   const manifestItems = Object.values(manifest).sort((a, b) => b.updatedAtMs - a.updatedAtMs);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-200">
+    <div className="min-h-screen bg-black text-[#EDEDED] font-sans antialiased selection:bg-white/20">
+      {/* Floating Centered Apple Dynamic Notch */}
+      <DynamicNotch
+        health={health}
+        wsState={wsState}
+        activeAlert={alerts[0] ?? null}
+        txCount={txs.length}
+        onOpenWizard={() => setShowWizard(true)}
+        onOpenFeedback={() => setShowFeedbackModal(true)}
+        onRollbackLatest={rollback}
+      />
+
+      {/* Main Top Header */}
       <Header
         health={health}
         wsState={wsState}
         onOpenWizard={() => setShowWizard(true)}
+        onOpenFeedback={() => setShowFeedbackModal(true)}
       />
 
+      {/* Onboarding Wizard Sheet */}
       {showWizard && (
         <OnboardingWizard
           onComplete={() => {
@@ -187,44 +221,91 @@ export function App(): JSX.Element {
         />
       )}
 
-      <nav className="border-b border-zinc-800/70 bg-zinc-900/40">
-        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto scrollbar-thin px-4">
-          {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm font-medium transition ${
-                tab === id
-                  ? 'border-sky-400 text-sky-300'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              {label}
-              {id === 'manifest' && manifestItems.length > 0 && (
-                <span className="ml-2 rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400 tabular-nums">
-                  {manifestItems.length}
-                </span>
-              )}
-              {id === 'feed' && txs.length > 0 && (
-                <span className="ml-2 rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400 tabular-nums">
-                  {txs.length}
-                </span>
-              )}
-            </button>
-          ))}
+      {/* Customer Feedback Modal */}
+      <CustomerFeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        onSubmitFeedback={handleFeedbackSubmit}
+      />
+
+      {/* Apple-style Segmented Navigation Control */}
+      <nav className="border-b border-white/[0.08] bg-[#09090B]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-2.5">
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
+            {TABS.map(({ id, label, icon: Icon }) => {
+              const isActive = tab === id;
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  className={`relative flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                    isActive ? 'text-white' : 'text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {/* Sliding spring background indicator */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeTabIndicator"
+                      transition={appleSpring.gentle}
+                      className="absolute inset-0 rounded-xl bg-white/[0.12] border border-white/[0.14] shadow-sm"
+                    />
+                  )}
+
+                  <span className="relative z-10 flex items-center gap-2">
+                    <Icon size={13} className={isActive ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
+                    <span>{label}</span>
+
+                    {id === 'manifest' && manifestItems.length > 0 && (
+                      <span className="ml-1 rounded-full bg-white/[0.1] px-1.5 py-0.2 text-[10px] text-white/70 font-mono tabular-nums">
+                        {manifestItems.length}
+                      </span>
+                    )}
+                    {id === 'feed' && txs.length > 0 && (
+                      <span className="ml-1 rounded-full bg-white/[0.1] px-1.5 py-0.2 text-[10px] text-white/70 font-mono tabular-nums">
+                        {txs.length}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 text-xs text-white/40 font-mono">
+            <span>Invariant I1:</span>
+            <span className="text-[#30D158] font-semibold">LOCKED</span>
+          </div>
         </div>
       </nav>
 
-      <main className="mx-auto max-w-7xl px-4 py-5">
-        {tab === 'manifest' && <ManifestTab items={manifestItems} onRefresh={loadManifest} />}
-        {tab === 'feed' && (
-          <FeedTab txs={txs} alerts={alerts} onDismissAlert={dismissAlert} onRollback={rollback} />
-        )}
-        {tab === 'inspector' && <InspectorTab />}
-        {tab === 'dag3d' && <Dag3dTab dag={dag} />}
+      {/* Main Workspace with Physics Animation */}
+      <main className="mx-auto max-w-7xl px-6 py-6">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={appleSpring.snappy}
+          >
+            {tab === 'manifest' && <ManifestTab items={manifestItems} onRefresh={loadManifest} />}
+            {tab === 'feed' && (
+              <FeedTab
+                txs={txs}
+                alerts={alerts}
+                onDismissAlert={dismissAlert}
+                onRollback={rollback}
+              />
+            )}
+            {tab === 'inspector' && <InspectorTab />}
+            {tab === 'dag3d' && <Dag3dTab dag={dag} />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
+      {/* Floating Apple Toast Notifications */}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

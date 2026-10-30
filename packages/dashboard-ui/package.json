@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@astram/types": "workspace:*",
+    "framer-motion": "^14.7.1",
+    "lucide-react": "^1.64.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

@@ -117,16 +117,16 @@ export function layoutDag(nodes: DagNode[], edges: DagEdge[]): Dag3dData {
 // ---------------------------------------------------------------------------
 
 export function nodeColor(n: DagNode): string {
-  if (n.canaryFork || n.disposition === 'CANARY_HEALED') return '#eab308'; // gold branch
+  if (n.canaryFork || n.disposition === 'CANARY_HEALED') return '#FF9F0A'; // Apple System Orange (canary fork)
   switch (n.disposition) {
     case 'COMMITTED':
-      return '#10b981'; // emerald
+      return '#30D158'; // Apple System Green (clean committed)
     case 'ROLLED_BACK':
-      return '#ef4444'; // red
+      return '#FF453A'; // Apple System Red (rolled back)
     case 'BLOCKED_PRE_EXEC':
-      return '#f97316'; // orange
+      return '#FF453A'; // Apple System Red (blocked)
     default:
-      return '#64748b'; // slate (unknown disposition)
+      return '#8E8E93'; // Apple System Titanium / Slate (neutral)
   }
 }
 
@@ -333,7 +333,7 @@ export function Dag3dTab({ dag }: { dag: { nodes: DagNode[]; edges: DagEdge[] } 
       <div className="flex flex-col gap-3 lg:flex-row">
         <div
           ref={containerRef}
-          className="relative h-[520px] min-h-[520px] shrink-0 lg:shrink lg:flex-1 cursor-grab touch-none overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 active:cursor-grabbing"
+          className="relative h-[540px] min-h-[540px] shrink-0 lg:shrink lg:flex-1 cursor-grab touch-none overflow-hidden rounded-2xl border border-white/[0.08] bg-black active:cursor-grabbing"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
@@ -369,7 +369,7 @@ export function Dag3dTab({ dag }: { dag: { nodes: DagNode[]; edges: DagEdge[] } 
 
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <p className="rounded-lg border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm text-zinc-400">
+              <p className="rounded-xl border border-white/[0.08] bg-[#0D0D0F]/90 backdrop-blur-md px-4 py-3 text-xs text-white/50">
                 Multiverse is empty — no transactions recorded yet.
               </p>
             </div>
@@ -377,24 +377,24 @@ export function Dag3dTab({ dag }: { dag: { nodes: DagNode[]; edges: DagEdge[] } 
 
           {/* hover tooltip — state-driven HTML overlay (no drei <Html>) */}
           {hovered && (
-            <div className="pointer-events-none absolute left-3 top-3 max-w-xs rounded-lg border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs shadow-xl">
-              <p className="font-mono text-zinc-200">{shortId(hovered.txId)}</p>
-              <p className="mt-1 text-zinc-400">
+            <div className="pointer-events-none absolute left-3 top-3 max-w-xs rounded-xl border border-white/[0.12] bg-[#121214]/95 backdrop-blur-md px-3.5 py-2.5 text-xs shadow-2xl">
+              <p className="font-mono text-white font-medium">{shortId(hovered.txId)}</p>
+              <p className="mt-1 text-white/50">
                 disposition: <span style={{ color: nodeColor(hovered) }}>{hovered.disposition}</span>
               </p>
-              <p className="text-zinc-400">risk: {riskName(hovered.finalRisk)}</p>
-              {hovered.label && <p className="text-zinc-500">label: {hovered.label}</p>}
+              <p className="text-white/50">risk: {riskName(hovered.finalRisk)}</p>
+              {hovered.label && <p className="text-white/40">label: {hovered.label}</p>}
             </div>
           )}
         </div>
 
         {/* selected-node side panel */}
-        <aside className="w-full shrink-0 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-sm lg:w-72">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Node details
+        <aside className="w-full shrink-0 rounded-2xl border border-white/[0.08] bg-[#0D0D0F] p-5 text-xs lg:w-80">
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+            Node Inspection
           </h3>
           {!selected ? (
-            <p className="text-zinc-500">Click a sphere in the tree to inspect it.</p>
+            <p className="text-white/40 text-xs">Click a sphere in the fiber tree to inspect details.</p>
           ) : (
             <dl className="space-y-1.5 text-zinc-300">
               <div>

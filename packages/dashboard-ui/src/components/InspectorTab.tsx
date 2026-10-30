@@ -1,19 +1,20 @@
 /**
- * Tab 3 — Deception Inspector.
+ * Tab 3 — Deception Inspector (Apple Human Interface Standard).
  *
- * GET /api/transactions (limit 200); selecting one shows two side-by-side
- * panels: CLAIMED (untrusted) — the tool's own statedExplanation — versus
- * ACTUAL (observed) — deterministic facts, modified files and the final
- * monotonic risk from the audit ledger.
+ * Golden Ratio ($38.2% / 61.8%) Master-Detail View:
+ * Compares what a tool CLAIMED it would do against what the microkernel ACTUALLY observed.
  */
-import { useEffect, useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import type { JSX, ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { RotateCw, ShieldCheck, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react';
 import type { AtomicAuditTx } from '@astram/types';
 import { api } from '../lib/api';
 import { clockTime, parseStringArray, prettyJson, riskName } from '../lib/format';
 import { HostBadge, RiskBadge } from './Badges';
+import { appleSpring } from '../lib/theme';
 
-/** The §5.2 ledger schema does not persist per-fact rows at Tier 1; render them when present. */
 interface ObservedFact {
   ruleId?: string;
   category?: string;
@@ -28,9 +29,9 @@ function factsOf(tx: AtomicAuditTx): ObservedFact[] {
 
 function ObservedRow({ label, children }: { label: string; children: ReactNode }): JSX.Element {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-zinc-800/60 py-1.5 text-sm last:border-0">
-      <span className="shrink-0 text-xs uppercase tracking-wider text-zinc-500">{label}</span>
-      <span className="min-w-0 break-all text-right text-zinc-200">{children}</span>
+    <div className="flex items-baseline justify-between gap-4 border-b border-white/[0.04] py-2 text-xs last:border-0">
+      <span className="shrink-0 text-[11px] font-medium uppercase tracking-wider text-white/40">{label}</span>
+      <span className="min-w-0 break-all text-right text-white/80">{children}</span>
     </div>
   );
 }
@@ -47,7 +48,7 @@ export function InspectorTab(): JSX.Element {
       .transactions(200)
       .then((list) => {
         setTxs(list);
-        setSelected((prev) => prev && list.some((t) => t.txId === prev.txId) ? prev : (list[0] ?? null));
+        setSelected((prev) => (prev && list.some((t) => t.txId === prev.txId) ? prev : (list[0] ?? null)));
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
@@ -59,174 +60,220 @@ export function InspectorTab(): JSX.Element {
   const facts = selected ? factsOf(selected) : [];
 
   return (
-    <section>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm text-zinc-400">
-          Compare what a tool <em>claimed</em> it would do against what the ledger actually observed.
-        </p>
+    <section className="space-y-4">
+      {/* Header bar */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight text-white">
+            Deception Inspector
+          </h2>
+          <p className="text-xs text-white/50">
+            Compare tool stated intent against deterministic AST facts and filesystem mutations.
+          </p>
+        </div>
+
         <button
           type="button"
           onClick={load}
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white border border-white/[0.08] text-xs font-medium transition cursor-pointer disabled:opacity-50"
         >
-          {loading ? 'loading…' : 'refresh'}
+          <RotateCw size={12} className={`stroke-[2] ${loading ? 'animate-spin' : ''}`} />
+          <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
         </button>
       </div>
 
       {error && (
-        <p className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-2xl border border-[#FF453A]/30 bg-[#FF453A]/10 p-3.5 text-xs text-[#FF453A]">
           {error}
-        </p>
+        </div>
       )}
 
+      {/* Golden Ratio Master-Detail Grid */}
       <div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
-        {/* transaction list */}
-        <div className="scrollbar-thin max-h-[32rem] overflow-auto rounded-xl border border-zinc-800">
+        {/* MASTER: Transactions List */}
+        <div className="scrollbar-thin max-h-[36rem] overflow-auto rounded-2xl border border-white/[0.08] bg-[#0D0D0F]">
+          <div className="sticky top-0 bg-[#0D0D0F]/95 backdrop-blur-md px-4 py-3 border-b border-white/[0.06] text-[11px] font-medium uppercase tracking-wider text-white/45">
+            Audit Ledger ({txs.length})
+          </div>
+
           {txs.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-zinc-500">
+            <p className="px-4 py-12 text-center text-xs text-white/40">
               No transactions in the ledger yet.
             </p>
           ) : (
-            <ul className="divide-y divide-zinc-800/70">
-              {txs.map((tx) => (
-                <li key={tx.txId}>
-                  <button
-                    type="button"
-                    onClick={() => setSelected(tx)}
-                    className={`flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition hover:bg-zinc-800/40 ${
-                      selected?.txId === tx.txId ? 'bg-zinc-800/60' : ''
-                    }`}
-                  >
-                    <RiskBadge label={riskName(tx.finalMonotonicRisk)} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-mono text-xs text-zinc-200">
-                        {tx.toolName}
+            <ul className="divide-y divide-white/[0.04]">
+              {txs.map((tx) => {
+                const isSelected = selected?.txId === tx.txId;
+
+                return (
+                  <li key={tx.txId}>
+                    <button
+                      type="button"
+                      onClick={() => setSelected(tx)}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer ${
+                        isSelected ? 'bg-white/[0.08]' : 'hover:bg-white/[0.03]'
+                      }`}
+                    >
+                      <RiskBadge label={riskName(tx.finalMonotonicRisk)} />
+
+                      <span className="min-w-0 flex-1 space-y-0.5">
+                        <span className="block truncate font-mono text-xs font-medium text-white">
+                          {tx.toolName}
+                        </span>
+                        <span className="block truncate font-mono text-[10px] text-white/40">
+                          {tx.txId.slice(0, 18)}…
+                        </span>
                       </span>
-                      <span className="block truncate font-mono text-[11px] text-zinc-500">
-                        {tx.txId.slice(0, 20)}…
+
+                      <span className="shrink-0 font-mono text-[10px] text-white/40">
+                        {clockTime(tx.timestampMs)}
                       </span>
-                    </span>
-                    <span className="shrink-0 font-mono text-[11px] text-zinc-500">
-                      {clockTime(tx.timestampMs)}
-                    </span>
-                  </button>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
 
-        {/* claimed vs actual */}
+        {/* DETAIL: Stated vs Actual Comparison */}
         {!selected ? (
-          <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-zinc-800 text-sm text-zinc-500">
-            Select a transaction to inspect it.
+          <div className="flex h-96 items-center justify-center rounded-2xl border border-white/[0.08] bg-[#0D0D0F] p-8 text-center text-white/40 text-xs">
+            Select a transaction from the ledger to inspect deception telemetry.
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* CLAIMED — untrusted */}
-            <div className="overflow-hidden rounded-xl border border-amber-500/40">
-              <div className="flex items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
-                <h3 className="text-sm font-semibold text-amber-200">CLAIMED</h3>
-                <span className="rounded-full border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                  untrusted
+          <motion.div
+            key={selected.txId}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={appleSpring.snappy}
+            className="grid gap-4 md:grid-cols-2"
+          >
+            {/* CLAIMED CARD */}
+            <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0D0D0F]">
+              <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <FileText size={14} className="text-white/50" />
+                  <h3 className="text-xs font-semibold text-white">CLAIMED INTENT</h3>
+                </div>
+                <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 text-[10px] font-mono text-white/50">
+                  Tool Stated
                 </span>
               </div>
-              <div className="p-4">
-                <p className="text-sm italic leading-relaxed text-zinc-300">
-                  {selected.statedExplanation?.trim() ||
-                    '(the tool offered no explanation for this call)'}
-                </p>
-                <p className="mt-4 text-xs uppercase tracking-wider text-zinc-500">
-                  redacted arguments (as claimed context)
-                </p>
-                <pre className="scrollbar-thin mt-1.5 max-h-40 overflow-auto rounded-lg border border-zinc-800 bg-black/60 p-2.5 font-mono text-[11px] leading-relaxed text-zinc-400">
-                  {prettyJson(selected.redactedArgumentsJson || '[]')}
-                </pre>
+
+              <div className="p-4 space-y-3">
+                <div>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40 block mb-1">
+                    Stated Purpose
+                  </span>
+                  <div className="rounded-xl border border-white/[0.06] bg-black/40 p-3 text-xs leading-relaxed text-white/80">
+                    {selected.statedPurpose || '(none provided by tool caller)'}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40 block mb-1">
+                    Tool Arguments (Redacted)
+                  </span>
+                  <pre className="scrollbar-thin max-h-48 overflow-auto rounded-xl border border-white/[0.06] bg-black/60 p-3 font-mono text-[11px] leading-relaxed text-white/70">
+                    {prettyJson(selected.redactedArgumentsJson || '[]')}
+                  </pre>
+                </div>
               </div>
             </div>
 
-            {/* ACTUAL — observed */}
-            <div className="overflow-hidden rounded-xl border border-zinc-700">
-              <div className="flex items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-800/60 px-4 py-2.5">
-                <h3 className="text-sm font-semibold text-zinc-200">ACTUAL</h3>
-                <span className="rounded-full border border-zinc-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                  observed
+            {/* ACTUAL OBSERVED CARD */}
+            <div className="overflow-hidden rounded-2xl border border-white/[0.12] bg-[#121214]">
+              <div className="flex items-center justify-between border-b border-white/[0.08] bg-white/[0.03] px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={14} className="text-[#30D158]" />
+                  <h3 className="text-xs font-semibold text-white">ACTUAL OBSERVATION</h3>
+                </div>
+                <span className="rounded-full bg-[#30D158]/10 border border-[#30D158]/30 px-2 py-0.5 text-[10px] font-mono font-medium text-[#30D158]">
+                  Kernel Verified
                 </span>
               </div>
-              <div className="p-4">
-                <ObservedRow label="final risk">
+
+              <div className="p-4 space-y-2">
+                <ObservedRow label="Final Monotonic Risk">
                   <RiskBadge label={riskName(selected.finalMonotonicRisk)} />
                 </ObservedRow>
-                <ObservedRow label="disposition">
+
+                <ObservedRow label="Kernel Disposition">
                   <span className="font-mono text-xs">{selected.disposition}</span>
                 </ObservedRow>
-                <ObservedRow label="deterministic / jev Δ">
-                  <span className="font-mono text-xs">
+
+                <ObservedRow label="AST Risk / Jev Δ">
+                  <span className="font-mono text-xs text-white/90">
                     {riskName(selected.deterministicRisk)} /{' '}
                     {selected.decisionApiDelta > 0
                       ? `+${selected.decisionApiDelta}`
                       : selected.decisionApiDelta}
                   </span>
                 </ObservedRow>
-                <ObservedRow label="host">
+
+                <ObservedRow label="Protected Host">
                   <HostBadge host={selected.agentHost} />
                 </ObservedRow>
-                <ObservedRow label="anomaly">
-                  <span className="font-mono text-xs tabular-nums">
+
+                <ObservedRow label="Anomaly Metric">
+                  <span className="font-mono text-xs text-white/70 tabular-nums">
                     {selected.anomalyScore.toFixed(2)}
                   </span>
                 </ObservedRow>
 
-                <p className="mt-3 text-xs uppercase tracking-wider text-zinc-500">facts</p>
-                {facts.length > 0 ? (
-                  <table className="mt-1.5 w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-zinc-500">
-                        <th className="pr-2 font-medium">rule</th>
-                        <th className="pr-2 font-medium">category</th>
-                        <th className="pr-2 font-medium">line</th>
-                        <th className="font-medium">snippet</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {facts.map((fact, i) => (
-                        <tr key={i} className="border-t border-zinc-800/60 align-top">
-                          <td className="whitespace-nowrap py-1 pr-2 font-mono text-zinc-300">
-                            {fact.ruleId ?? '—'}
-                          </td>
-                          <td className="py-1 pr-2 text-zinc-400">{fact.category ?? '—'}</td>
-                          <td className="py-1 pr-2 font-mono text-zinc-500">{fact.line ?? '—'}</td>
-                          <td className="py-1 break-all font-mono text-zinc-400">
-                            {fact.snippet ?? '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    The Tier-1 ledger schema (Handbook §5.2) does not persist per-fact AST rows;
-                    the observed verdict above is the authoritative monotonic result.
-                  </p>
-                )}
+                <div className="pt-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40 block mb-1.5">
+                    Extracted AST Facts
+                  </span>
+                  {facts.length > 0 ? (
+                    <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-black/40">
+                      <table className="w-full text-left text-[11px]">
+                        <thead>
+                          <tr className="border-b border-white/[0.04] text-white/40 text-[10px]">
+                            <th className="p-2">Rule</th>
+                            <th className="p-2">Category</th>
+                            <th className="p-2">Line</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.03]">
+                          {facts.map((fact, idx) => (
+                            <tr key={idx} className="font-mono text-white/70">
+                              <td className="p-2">{fact.ruleId ?? '—'}</td>
+                              <td className="p-2 text-white/50">{fact.category ?? '—'}</td>
+                              <td className="p-2 text-white/40">{fact.line ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-white/40 leading-relaxed font-sans">
+                      Authoritative monotonic verdict locked via deterministic invariants.
+                    </p>
+                  )}
+                </div>
 
-                <p className="mt-3 text-xs uppercase tracking-wider text-zinc-500">
-                  fs modified files
-                </p>
-                {fsModified.length > 0 ? (
-                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4 font-mono text-xs text-zinc-300">
-                    {fsModified.map((f) => (
-                      <li key={f} className="break-all">
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-1 font-mono text-xs text-zinc-500">(none recorded)</p>
-                )}
+                <div className="pt-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40 block mb-1">
+                    Filesystem Interceptions
+                  </span>
+                  {fsModified.length > 0 ? (
+                    <ul className="rounded-xl border border-white/[0.06] bg-black/40 p-2.5 font-mono text-[11px] text-white/70 space-y-1">
+                      {fsModified.map((f) => (
+                        <li key={f} className="truncate">
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-white/40 font-mono">(zero file mutations)</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </section>

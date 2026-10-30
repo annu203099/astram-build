@@ -26,12 +26,12 @@ export interface OnboardingWizardProps {
 type WizardStep = 'detect' | 'scope' | 'engine' | 'apply';
 
 const AGENT_ICONS: Record<string, string> = {
-  antigravity: 'Λ',
-  'claude-code': '✦',
-  cursor: '▲',
-  codex: '⚙',
-  quill: '✒',
-  dsh: '⚡',
+  antigravity: 'AG',
+  'claude-code': 'CC',
+  cursor: 'CR',
+  codex: 'CX',
+  quill: 'QL',
+  dsh: 'DS',
 };
 
 export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps): JSX.Element {
@@ -396,14 +396,14 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                         </label>
 
                         {isSelected && (
-                          <div className="flex items-center rounded-lg border border-zinc-700 bg-zinc-800 p-0.5 text-xs">
+                          <div className="flex items-center rounded-xl border border-white/[0.08] bg-white/[0.04] p-0.5 text-xs">
                             <button
                               type="button"
                               onClick={() => handleScopeChange(agent.agentHost, 'global')}
-                              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                              className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition ${
                                 currentScope === 'global'
-                                  ? 'bg-sky-500 text-zinc-950 font-semibold'
-                                  : 'text-zinc-400 hover:text-zinc-200'
+                                  ? 'bg-white text-black font-semibold shadow-sm'
+                                  : 'text-white/50 hover:text-white'
                               }`}
                             >
                               Global / Whole-Agent
@@ -411,10 +411,10 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                             <button
                               type="button"
                               onClick={() => handleScopeChange(agent.agentHost, 'project')}
-                              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                              className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition ${
                                 currentScope === 'project'
-                                  ? 'bg-sky-500 text-zinc-950 font-semibold'
-                                  : 'text-zinc-400 hover:text-zinc-200'
+                                  ? 'bg-white text-black font-semibold shadow-sm'
+                                  : 'text-white/50 hover:text-white'
                               }`}
                             >
                               Project-Wise
@@ -690,7 +690,7 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                     type="button"
                     onClick={handleApply}
                     disabled={applying || selectedCount === 0}
-                    className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 py-3 font-semibold text-zinc-950 hover:from-sky-400 hover:to-indigo-400 transition disabled:opacity-50"
+                    className="w-full rounded-2xl bg-white py-3.5 font-semibold text-black hover:bg-white/90 active:scale-[0.99] transition disabled:opacity-30 cursor-pointer shadow-lg"
                   >
                     {applying ? 'Applying Protection & Backing up Configs…' : 'Apply Zero-Trust Protection Now'}
                   </button>
@@ -724,7 +724,7 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
                   else if (step === 'scope') setStep('engine');
                   else if (step === 'engine') setStep('apply');
                 }}
-                className="rounded-lg bg-sky-500 px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-sky-400 transition"
+                className="rounded-xl bg-white px-4 py-1.5 text-xs font-semibold text-black hover:bg-white/90 active:scale-95 transition cursor-pointer"
               >
                 Continue
               </button>
