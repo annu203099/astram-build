@@ -3,6 +3,7 @@
  *
  * Design:
  * - Minimalist concentric geometric vector rings with an optical reactive core.
+ * - Interactive parallax eye-tracking toward the cursor.
  * - Zero emojis, zero gradients.
  * - Reactive states: idle breathing, scan radar sweep, threat-defense shield, and click-to-interact feedback.
  */
@@ -10,6 +11,7 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Check, X } from 'lucide-react';
 import { appleSpring } from '../lib/theme';
 
 export type AstraMood = 'idle' | 'scanning' | 'alert' | 'secure';
@@ -27,6 +29,7 @@ export function AstraMascot({
   onClick,
 }: AstraMascotProps): JSX.Element {
   const [isHovered, setIsHovered] = useState(false);
+  const [pupilOffset, setPupilOffset] = useState({ x: 0, y: 0 });
 
   // Status color purely indicative: green for secure/idle, amber for scanning, red for alert
   const coreColor =
@@ -36,12 +39,28 @@ export function AstraMascot({
         ? '#FF9F0A'
         : '#30D158';
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = (e.clientX - rect.left - rect.width / 2) / (rect.width / 2);
+    const relY = (e.clientY - rect.top - rect.height / 2) / (rect.height / 2);
+    setPupilOffset({
+      x: Math.max(-2.5, Math.min(2.5, relX * 2.5)),
+      y: Math.max(-2.5, Math.min(2.5, relY * 2.5)),
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    setPupilOffset({ x: 0, y: 0 });
+  };
+
   return (
     <motion.button
       type="button"
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       title="Astra — Kernel Guardian (Click for Assistant & Feedback)"
       className="relative flex items-center justify-center cursor-pointer p-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/40"
       whileHover={{ scale: 1.08 }}
@@ -93,13 +112,15 @@ export function AstraMascot({
           }
         />
 
-        {/* Inner Sentinel Pupil — Indicative Status Dot */}
+        {/* Inner Sentinel Pupil — Reactive Optical Gaze + Indicative Status Dot */}
         <motion.circle
           cx="16"
           cy="16"
           r="3.5"
           fill={coreColor}
           animate={{
+            x: pupilOffset.x,
+            y: pupilOffset.y,
             scale: isHovered ? 1.25 : 1,
           }}
           transition={appleSpring.snappy}
@@ -190,12 +211,9 @@ export function CustomerFeedbackModal({
             <button
               type="button"
               onClick={onClose}
-              className="text-white/40 hover:text-white p-1 rounded-md transition-colors"
+              className="text-white/40 hover:text-white p-1 rounded-md transition-colors cursor-pointer"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              <X size={14} />
             </button>
           </div>
 
@@ -206,9 +224,7 @@ export function CustomerFeedbackModal({
               className="py-10 text-center space-y-2"
             >
               <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-[#30D158]/10 text-[#30D158] border border-[#30D158]/30">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check size={20} className="stroke-[2.5]" />
               </div>
               <h4 className="text-sm font-semibold text-white">Thank You for Your Feedback</h4>
               <p className="text-xs text-white/50">
@@ -233,7 +249,7 @@ export function CustomerFeedbackModal({
                       key={opt.key}
                       type="button"
                       onClick={() => setSentiment(opt.key)}
-                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
+                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
                         sentiment === opt.key
                           ? 'bg-white/12 border-white/30 text-white'
                           : 'bg-white/[0.03] border-white/8 text-white/50 hover:bg-white/[0.06]'
@@ -266,13 +282,13 @@ export function CustomerFeedbackModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-white/60 hover:text-white transition-colors"
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-white/60 hover:text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl bg-white text-black text-xs font-semibold hover:bg-white/90 active:scale-95 transition-all"
+                  className="px-4 py-1.5 rounded-xl bg-white text-black text-xs font-semibold hover:bg-white/90 active:scale-95 transition-all cursor-pointer"
                 >
                   Submit Feedback
                 </button>
